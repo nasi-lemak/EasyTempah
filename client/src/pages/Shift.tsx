@@ -1,0 +1,188 @@
+import { useCallback, useEffect, useState } from 'react';
+import { api } from '../api';
+import Modal from '../components/Modal';
+import { useMoney } from '../store';
+import { formatDateTime } from '../time';
+import type { Shift, ShiftSummary } from '../types';
+import { useEvents } from '../useEvents';
+
+interface CashMovement {
+  id: number;
+  type: 'in' | 'out';
+  amount_cents: number;
+  reason: string;
+  user_name: string;
+  created_at: string;
+}
+
+export default function ShiftPage() {
+  const money = useMoney();
+  const [shift, setShift] = useState<Shift | null>(null);
+  const [summary, setSummary] = useState<ShiftSummary | null>(null);
+  const [movements, setMovements] = useState<CashMovement[]>([]);
+  const [showOpen, setShowOpen] = useState(false);
+  const [showMove, setShowMove] = useState<'in' | 'out' | null>(null);
+  const [showClose, setShowClose] = useState(false);
+  const [amountStr, setAmountStr] = useState('');
+  const [reason, setReason] = useState('');
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
+  const [closed, setClosed] = useState<{ variance_cents: number } | null>(null);
+
+  const load = useCallback(() => {
+    api
+      .get<{ shift: Shift | null; summary?: ShiftSummary; movements?: CashMovement[] }>('/api/shifts/current')
+      .then((r) => {
+        setShift(r.shift);
+        setSummary(r.summary ?? null);
+        setMovements(r.movements ?? []);
+      })
+      .catch(() => {});
+  }, []);
+  useEffect(load, [load]);
+  useEvents(['shifts', 'orders'], load);
+
+  const cents = () => Math.round(parseFloat(amountStr || '0') * 100);
+
+  const doOpen = async () => {
+    setError('');
+    try {
+      await api.post('/api/shifts/open', { opening_float_cents: cents() });
+      setShowOpen(false);
+      setAmountStr('');
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    }
+  };
+
+  const doMove = async () => {
+    setError('');
+    try {
+      await api.post('/api/shifts/cash-movements', {
+        type: showMove,
+        amount_cents: cents(),
+        reason,
+      });
+      setShowMove(null);
+      setAmountStr('');
+      setReason('');
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    }
+  };
+
+  const doClose = async () => {
+    setError('');
+    try {
+      const r = await api.post<{ variance_cents: number }>('/api/shifts/close', {
+        counted_cash_cents: cents(),
+        notes: notes || undefined,
+      });
+      setShowClose(false);
+      setAmountStr('');
+      setNotes('');
+      setClosed(r);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    }
+  };
+
+  if (!shift) {
+    return (
+      <div>
+        <h1>Shift</h1>
+        <div className="panel mt">
+          <p className="muted">No shift is open. Open one to start taking payments against a till.</p>
+          <button className="primary" onClick={() => setShowOpen(true)}>Open shift</button>
+          {closed && (
+            <div className="mt">
+              Last shift closed with variance{' '}
+              <strong style={{ color: closed.variance_cents === 0 ? 'var(--accent)' : 'var(--danger)' }}>
+                {money(closed.variance_cents)}
+              </strong>
+            </div>
+          )}
+        </div>
+        {showOpen && (
+          <Modal title="Open shift" onClose={() => setShowOpen(false)}>
+            <label>Opening float (RM)</label>
+            <input inputMode="decimal" value={amountStr} onChange={(e) => setAmountStr(e.target.value)} placeholder="200.00" style={{ width: '100%' }} />
+            <button className="primary mt" onClick={doOpen}>Open</button>
+            {error && <div className="error-text mt">{error}</div>}
+          </Modal>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="row mb">
+        <h1 className="grow">Shift #{shift.id}</h1>
+        <button onClick={() => setShowMove('in')}>Cash in</button>
+        <button onClick={() => setShowMove('out')}>Cash out</button>
+        <button className="danger" onClick={() => setShowClose(true)}>Close shift</button>
+      </div>
+      <div className="muted small mb">Opened {formatDateTime(shift.opened_at)} · float {money(shift.opening_float_cents)}</div>
+
+      {summary && (
+        <div className="stat-grid mb">
+          <div className="stat"><div className="label">Total sales</div><div className="value">{money(summary.total_sales_cents)}</div></div>
+          <div className="stat"><div className="label">Orders paid</div><div className="value">{summary.orders_paid}</div></div>
+          <div className="stat"><div className="label">Cash</div><div className="value">{money(summary.cash_sales_cents)}</div></div>
+          <div className="stat"><div className="label">Card</div><div className="value">{money(summary.card_sales_cents)}</div></div>
+          <div className="stat"><div className="label">E-Wallet</div><div className="value">{money(summary.ewallet_sales_cents)}</div></div>
+          <div className="stat"><div className="label">Expected in drawer</div><div className="value">{money(summary.expected_cash_cents)}</div></div>
+        </div>
+      )}
+
+      <h2>Cash movements</h2>
+      <table className="data">
+        <thead>
+          <tr><th>When</th><th>Type</th><th>Reason</th><th>By</th><th className="num">Amount</th></tr>
+        </thead>
+        <tbody>
+          {movements.map((m) => (
+            <tr key={m.id}>
+              <td className="small muted">{formatDateTime(m.created_at)}</td>
+              <td>{m.type === 'in' ? 'Paid in' : 'Paid out'}</td>
+              <td>{m.reason}</td>
+              <td>{m.user_name}</td>
+              <td className="num">{m.type === 'in' ? '' : '-'}{money(m.amount_cents)}</td>
+            </tr>
+          ))}
+          {movements.length === 0 && <tr><td colSpan={5} className="muted">None yet.</td></tr>}
+        </tbody>
+      </table>
+
+      {showMove && (
+        <Modal title={showMove === 'in' ? 'Cash in (paid in)' : 'Cash out (paid out)'} onClose={() => setShowMove(null)}>
+          <label>Amount (RM)</label>
+          <input inputMode="decimal" value={amountStr} onChange={(e) => setAmountStr(e.target.value)} style={{ width: '100%' }} className="mb" />
+          <label>Reason</label>
+          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={showMove === 'out' ? 'e.g. supplier COD' : 'e.g. change top-up'} style={{ width: '100%' }} />
+          <button className="primary mt" onClick={doMove}>Record</button>
+          {error && <div className="error-text mt">{error}</div>}
+        </Modal>
+      )}
+
+      {showClose && summary && (
+        <Modal title="Close shift" onClose={() => setShowClose(false)}>
+          <p className="muted small">
+            Expected cash in drawer: <strong>{money(summary.expected_cash_cents)}</strong>. Count the drawer and
+            enter the actual amount — the variance is recorded.
+          </p>
+          <label>Counted cash (RM)</label>
+          <input inputMode="decimal" value={amountStr} onChange={(e) => setAmountStr(e.target.value)} style={{ width: '100%' }} className="mb" />
+          <label>Notes</label>
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} style={{ width: '100%' }} />
+          <button className="danger mt" onClick={doClose}>Close shift</button>
+          {error && <div className="error-text mt">{error}</div>}
+        </Modal>
+      )}
+    </div>
+  );
+}
