@@ -20,6 +20,7 @@ import {
   type PayInput,
   type RefundInput,
 } from '../services/orders';
+import { printKitchenTickets } from '../services/printer';
 import { getBusinessSettings, getTaxSettings } from '../services/settings';
 import type { OrderType } from '../types';
 
@@ -97,13 +98,14 @@ ordersRouter.patch('/:id/items/:lineId', (req: AuthedRequest, res) => {
 
 ordersRouter.post('/:id/send', (req: AuthedRequest, res) => {
   const orderId = Number(req.params.id);
-  const count = sendToKitchen(orderId, req.user!.id);
-  if (count > 0) {
+  const lineIds = sendToKitchen(orderId, req.user!.id);
+  if (lineIds.length > 0) {
     publish('kds');
     publish('orders');
     publish('inventory');
+    void printKitchenTickets(orderId, lineIds); // fire-and-forget; logs on failure
   }
-  res.json({ sent: count, order: getOrder(orderId) });
+  res.json({ sent: lineIds.length, order: getOrder(orderId) });
 });
 
 ordersRouter.patch('/:id', (req: AuthedRequest, res) => {

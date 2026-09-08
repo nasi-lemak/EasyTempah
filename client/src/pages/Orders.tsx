@@ -12,6 +12,7 @@ export default function Orders() {
   const money = useMoney();
   const navigate = useNavigate();
   const user = useStore((s) => s.user);
+  const printers = useStore((s) => s.printers);
   const [status, setStatus] = useState<'all' | 'open' | 'paid' | 'void'>('all');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [orders, setOrders] = useState<Order[]>([]);
@@ -113,9 +114,23 @@ export default function Orders() {
         <Modal title={`Receipt #${receipt.order.order_no}`} onClose={() => setReceipt(null)}>
           <Receipt order={receipt.order} business={receipt.business} tax={receipt.tax} />
           <div className="row mt">
-            <button className="primary grow" onClick={() => window.print()}>Print</button>
+            {printers?.receipt.enabled && (
+              <button className="primary grow"
+                onClick={async () => {
+                  setError('');
+                  try {
+                    await api.post(`/api/print/receipt/${receipt.order.id}`);
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : 'Print failed');
+                  }
+                }}>
+                Print (thermal)
+              </button>
+            )}
+            <button className="grow" onClick={() => window.print()}>Print (browser)</button>
             <button className="grow" onClick={() => setReceipt(null)}>Close</button>
           </div>
+          {error && <div className="error-text mt">{error}</div>}
         </Modal>
       )}
 

@@ -159,6 +159,18 @@ export interface TaxSettings {
   cashRoundingCents: number;
 }
 
+export interface PrinterTarget {
+  enabled: boolean;
+  host: string;
+  port: number;
+}
+
+export interface PrintersSettings {
+  receipt: PrinterTarget & { drawerKick: boolean };
+  kitchen: PrinterTarget;
+  bar: PrinterTarget;
+}
+
 export interface BusinessSettings {
   name: string;
   address: string;

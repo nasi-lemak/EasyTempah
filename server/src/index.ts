@@ -11,6 +11,7 @@ import { inventoryRouter } from './routes/inventory';
 import { kdsRouter } from './routes/kds';
 import { menuRouter } from './routes/menu';
 import { ordersRouter } from './routes/orders';
+import { printRouter } from './routes/print';
 import { reportsRouter } from './routes/reports';
 import { settingsRouter } from './routes/settings';
 import { shiftsRouter } from './routes/shifts';
@@ -33,6 +34,7 @@ app.use('/api/reports', reportsRouter);
 app.use('/api/inventory', inventoryRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/print', printRouter);
 
 // Server-Sent Events stream for realtime updates.
 app.get('/api/events', requireAuth, (req, res) => {

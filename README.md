@@ -15,6 +15,7 @@ kitchen displays and the back office, all over the local network.
 - Payments: cash (tendered/change), card, e-wallet; split bills by amount; Malaysian 5-sen cash rounding (configurable)
 - Refunds (partial or full) with a manager-approval flow: managers refund directly, cashiers approve with a manager's PIN; refunds hit the drawer, shift reconciliation and reports
 - QR table ordering: guests scan a per-table code, browse the menu on their phone and send orders straight to the kitchen — items land on the table's tab marked 📱, guests watch their live tab with exact totals, and payment stays at the counter. Managers print the QR sheet and can rotate a table's code to invalidate printed ones
+- ESC/POS thermal printing over the network (raw port 9100): kitchen and bar tickets print automatically per station when orders are sent (QR guest orders included), receipts print from the payment screen with optional cash-drawer kick, and Settings has per-printer config with a test button. Browser printing remains as a fallback
 - Printable 80 mm thermal-style receipts
 
 **Kitchen**

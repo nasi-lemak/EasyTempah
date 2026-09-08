@@ -1,14 +1,15 @@
 import { create } from 'zustand';
-import type { AuthUser, BusinessSettings, TaxSettings } from './types';
+import type { AuthUser, BusinessSettings, PrintersSettings, TaxSettings } from './types';
 
 interface AppState {
   token: string | null;
   user: AuthUser | null;
   business: BusinessSettings | null;
   tax: TaxSettings | null;
+  printers: PrintersSettings | null;
   setAuth: (token: string, user: AuthUser) => void;
   clearAuth: () => void;
-  setSettings: (business: BusinessSettings, tax: TaxSettings) => void;
+  setSettings: (business: BusinessSettings, tax: TaxSettings, printers?: PrintersSettings) => void;
 }
 
 const STORAGE_KEY = 'easytempah.auth';
@@ -27,6 +28,7 @@ export const useStore = create<AppState>((set) => ({
   ...loadStored(),
   business: null,
   tax: null,
+  printers: null,
   setAuth: (token, user) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ token, user }));
     set({ token, user });
@@ -35,7 +37,7 @@ export const useStore = create<AppState>((set) => ({
     localStorage.removeItem(STORAGE_KEY);
     set({ token: null, user: null });
   },
-  setSettings: (business, tax) => set({ business, tax }),
+  setSettings: (business, tax, printers) => set({ business, tax, ...(printers ? { printers } : {}) }),
 }));
 
 export function formatMoney(cents: number | null | undefined, symbol = 'RM'): string {

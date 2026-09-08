@@ -142,8 +142,9 @@ interface InsertOpts {
 }
 
 /** Validate and insert order lines. Call inside a transaction; caller recomputes totals. */
-function insertLines(orderId: number, lines: AddLineInput[], opts: InsertOpts): void {
+function insertLines(orderId: number, lines: AddLineInput[], opts: InsertOpts): number[] {
   if (!lines.length) throw badRequest('No items to add');
+  const insertedIds: number[] = [];
 
   const itemStmt = db.prepare('SELECT * FROM items WHERE id = ? AND active = 1');
   const modStmt = db.prepare(
@@ -188,7 +189,7 @@ function insertLines(orderId: number, lines: AddLineInput[], opts: InsertOpts): 
     }
 
     const modSum = snapshots.reduce((s, m) => s + m.price_delta_cents, 0);
-    db.prepare(
+    const info = db.prepare(
       `INSERT INTO order_items (order_id, item_id, name, qty, unit_price_cents, modifiers_json, notes,
          station, line_total_cents, source, status, sent_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -206,7 +207,9 @@ function insertLines(orderId: number, lines: AddLineInput[], opts: InsertOpts): 
       opts.status,
       opts.status === 'sent' ? new Date().toISOString().replace('T', ' ').slice(0, 19) : null,
     );
+    insertedIds.push(Number(info.lastInsertRowid));
   }
+  return insertedIds;
 }
 
 export const addItems = db.transaction((orderId: number, lines: AddLineInput[]): void => {
@@ -241,7 +244,8 @@ const MAX_GUEST_QTY = 20;
  * A guest at a table (identified by its QR token) submits items. They land on
  * the table's open tab — created if needed — already fired to the kitchen.
  */
-export const guestSubmitOrder = db.transaction((token: string, lines: AddLineInput[]): number => {
+export const guestSubmitOrder = db.transaction(
+  (token: string, lines: AddLineInput[]): { orderId: number; lineIds: number[] } => {
   const table = db
     .prepare('SELECT * FROM dining_tables WHERE qr_token = ? AND active = 1')
     .get(token) as { id: number } | undefined;
@@ -262,10 +266,11 @@ export const guestSubmitOrder = db.transaction((token: string, lines: AddLineInp
     order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as Order;
   }
 
-  insertLines(order.id, lines, { status: 'sent', source: 'guest', userId: guestId });
-  recomputeTotals(order.id);
-  return order.id;
-});
+    const lineIds = insertLines(order.id, lines, { status: 'sent', source: 'guest', userId: guestId });
+    recomputeTotals(order.id);
+    return { orderId: order.id, lineIds };
+  },
+);
 
 /** The table (and its open order, if any) behind a QR token — for the guest view. */
 export function guestTableState(token: string): {
@@ -333,13 +338,13 @@ function restock(itemId: number, qty: number, reason: string, ref: string, userI
   ).run(itemId, qty, reason, ref, userId);
 }
 
-/** Fire all pending lines to the kitchen, deducting tracked stock. */
-export const sendToKitchen = db.transaction((orderId: number, userId: number): number => {
+/** Fire all pending lines to the kitchen, deducting tracked stock. Returns the fired line ids. */
+export const sendToKitchen = db.transaction((orderId: number, userId: number): number[] => {
   requireOpenOrder(orderId);
   const pending = db
     .prepare("SELECT * FROM order_items WHERE order_id = ? AND status = 'pending'")
     .all(orderId) as OrderItem[];
-  if (!pending.length) return 0;
+  if (!pending.length) return [];
 
   for (const line of pending) {
     if (!line.item_id) continue;
@@ -360,7 +365,7 @@ export const sendToKitchen = db.transaction((orderId: number, userId: number): n
     `UPDATE order_items SET status = 'sent', sent_at = datetime('now')
      WHERE order_id = ? AND status = 'pending'`,
   ).run(orderId);
-  return pending.length;
+  return pending.map((l) => l.id);
 });
 
 export const setDiscount = db.transaction(

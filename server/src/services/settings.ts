@@ -1,5 +1,5 @@
 import { db } from '../db/connection';
-import type { BusinessSettings, TaxSettings } from '../types';
+import type { BusinessSettings, PrintersSettings, TaxSettings } from '../types';
 
 export const DEFAULT_BUSINESS: BusinessSettings = {
   name: 'EasyTempah Café',
@@ -44,4 +44,20 @@ export function getBusinessSettings(): BusinessSettings {
 
 export function getTaxSettings(): TaxSettings {
   return getSetting('tax', DEFAULT_TAX);
+}
+
+export const DEFAULT_PRINTERS: PrintersSettings = {
+  receipt: { enabled: false, host: '192.168.0.100', port: 9100, drawerKick: true },
+  kitchen: { enabled: false, host: '192.168.0.101', port: 9100 },
+  bar: { enabled: false, host: '192.168.0.102', port: 9100 },
+};
+
+export function getPrintersSettings(): PrintersSettings {
+  const stored = getSetting('printers', DEFAULT_PRINTERS);
+  // Deep-merge per printer so partial saves keep sane defaults.
+  return {
+    receipt: { ...DEFAULT_PRINTERS.receipt, ...stored.receipt },
+    kitchen: { ...DEFAULT_PRINTERS.kitchen, ...stored.kitchen },
+    bar: { ...DEFAULT_PRINTERS.bar, ...stored.bar },
+  };
 }

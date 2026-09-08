@@ -3,6 +3,7 @@ import { db } from '../db/connection';
 import { badRequest, notFound } from '../middleware/errors';
 import { publish } from '../realtime/bus';
 import { guestSubmitOrder, guestTableState, type AddLineInput } from '../services/orders';
+import { printKitchenTickets } from '../services/printer';
 import { getBusinessSettings, getTaxSettings } from '../services/settings';
 import type { Category, Item, Modifier, ModifierGroup } from '../types';
 
@@ -86,10 +87,11 @@ guestRouter.post('/:token/order', (req, res) => {
   const token = requireToken(req.params.token);
   const lines = (req.body as { lines?: AddLineInput[] }).lines;
   if (!Array.isArray(lines)) throw badRequest('lines[] required');
-  const orderId = guestSubmitOrder(token, lines);
+  const { orderId, lineIds } = guestSubmitOrder(token, lines);
   publish('kds');
   publish('orders');
   publish('tables');
   publish('inventory');
+  void printKitchenTickets(orderId, lineIds); // fire-and-forget; logs on failure
   res.status(201).json({ ok: true, order_id: orderId });
 });

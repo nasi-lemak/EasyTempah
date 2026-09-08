@@ -167,6 +167,18 @@ export interface TaxSettings {
   cashRoundingCents: number; // 5 = round cash totals to nearest 5 cents; 0 = off
 }
 
+export interface PrinterTarget {
+  enabled: boolean;
+  host: string;
+  port: number;
+}
+
+export interface PrintersSettings {
+  receipt: PrinterTarget & { drawerKick: boolean };
+  kitchen: PrinterTarget;
+  bar: PrinterTarget;
+}
+
 export interface BusinessSettings {
   name: string;
   address: string;

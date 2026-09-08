@@ -159,10 +159,20 @@ localStorage for terminal convenience (LAN deployment model).
 
 ## Receipts & printing
 
-Receipts render as a print-optimised HTML view (80 mm thermal CSS) driven by
-`GET /api/orders/:id/receipt` JSON. Browsers print to any OS-installed thermal
-printer driver; the JSON payload is also structured so an ESC/POS bridge can be
-added without touching order logic.
+Two paths, both driven by the same order data:
+
+- **HTML receipts** — a print-optimised view (80 mm thermal CSS) driven by
+  `GET /api/orders/:id/receipt` JSON, for browsers printing through any
+  OS-installed printer driver.
+- **ESC/POS bridge** — `services/escpos.ts` is a pure byte encoder (42-column
+  layout, alignment/bold/double-size, partial cut, drawer kick, ASCII-sanitised
+  text) with unit tests; `services/printer.ts` delivers documents to network
+  printers over raw TCP 9100 with a 5 s timeout. Kitchen and bar tickets print
+  automatically when lines are fired (staff send and QR guest submissions),
+  routed per station, as fire-and-forget so a dead printer never blocks an
+  order; explicit prints (receipt, reprint, test page) surface a 502 to staff
+  instead. Printer targets (host/port/enabled, drawer kick) live in settings
+  with a per-printer test button in the back office.
 
 ## Deployment
 

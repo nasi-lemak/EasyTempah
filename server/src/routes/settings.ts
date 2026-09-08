@@ -6,21 +6,26 @@ import {
   DEFAULT_BUSINESS,
   DEFAULT_TAX,
   getBusinessSettings,
+  getPrintersSettings,
   getTaxSettings,
   setSetting,
 } from '../services/settings';
-import type { BusinessSettings, TaxSettings } from '../types';
+import type { BusinessSettings, PrintersSettings, TaxSettings } from '../types';
 
 export const settingsRouter = Router();
 settingsRouter.use(requireAuth);
 
 /** Public (any signed-in role) — the POS needs currency/tax info everywhere. */
 settingsRouter.get('/', (_req, res) => {
-  res.json({ business: getBusinessSettings(), tax: getTaxSettings() });
+  res.json({ business: getBusinessSettings(), tax: getTaxSettings(), printers: getPrintersSettings() });
 });
 
 settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
-  const { business, tax } = req.body as { business?: Partial<BusinessSettings>; tax?: Partial<TaxSettings> };
+  const { business, tax, printers } = req.body as {
+    business?: Partial<BusinessSettings>;
+    tax?: Partial<TaxSettings>;
+    printers?: Partial<PrintersSettings>;
+  };
   if (business) {
     setSetting('business', { ...DEFAULT_BUSINESS, ...getBusinessSettings(), ...business });
   }
@@ -34,6 +39,21 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
     }
     setSetting('tax', merged);
   }
+  if (printers) {
+    const current = getPrintersSettings();
+    const merged: PrintersSettings = {
+      receipt: { ...current.receipt, ...printers.receipt },
+      kitchen: { ...current.kitchen, ...printers.kitchen },
+      bar: { ...current.bar, ...printers.bar },
+    };
+    for (const target of [merged.receipt, merged.kitchen, merged.bar]) {
+      if (!Number.isInteger(target.port) || target.port < 1 || target.port > 65535) {
+        throw badRequest('Printer port must be 1-65535');
+      }
+      if (target.enabled && !target.host.trim()) throw badRequest('Printer host required');
+    }
+    setSetting('printers', merged);
+  }
   audit(req.user!.id, 'settings.update');
-  res.json({ business: getBusinessSettings(), tax: getTaxSettings() });
+  res.json({ business: getBusinessSettings(), tax: getTaxSettings(), printers: getPrintersSettings() });
 });

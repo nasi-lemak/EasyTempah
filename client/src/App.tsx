@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { api } from './api';
 import { hasRole, useStore } from './store';
-import type { BusinessSettings, TaxSettings } from './types';
+import type { BusinessSettings, PrintersSettings, TaxSettings } from './types';
 import Login from './pages/Login';
 import Pos from './pages/Pos';
 import Tables from './pages/Tables';
@@ -69,8 +69,8 @@ export default function App() {
   useEffect(() => {
     if (!token) return;
     api
-      .get<{ business: BusinessSettings; tax: TaxSettings }>('/api/settings')
-      .then((r) => setSettings(r.business, r.tax))
+      .get<{ business: BusinessSettings; tax: TaxSettings; printers?: PrintersSettings }>('/api/settings')
+      .then((r) => setSettings(r.business, r.tax, r.printers))
       .catch(() => {
         /* 401 handled by api layer */
       });

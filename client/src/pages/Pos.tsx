@@ -16,6 +16,7 @@ export default function Pos() {
   const user = useStore((s) => s.user);
   const business = useStore((s) => s.business);
   const tax = useStore((s) => s.tax);
+  const printers = useStore((s) => s.printers);
 
   const [menu, setMenu] = useState<MenuData | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
@@ -319,9 +320,22 @@ export default function Pos() {
         <Modal title="Payment complete" onClose={closeReceipt}>
           <Receipt order={receiptOrder} business={business} tax={tax} />
           <div className="row mt">
-            <button className="primary grow" onClick={() => window.print()}>Print receipt</button>
+            {printers?.receipt.enabled && (
+              <button
+                className="primary grow"
+                onClick={() =>
+                  run(() => api.post(`/api/print/receipt/${receiptOrder.id}?drawer=1`))
+                }
+              >
+                Print (thermal)
+              </button>
+            )}
+            <button className={printers?.receipt.enabled ? 'grow' : 'primary grow'} onClick={() => window.print()}>
+              Print (browser)
+            </button>
             <button className="grow" onClick={closeReceipt}>Done</button>
           </div>
+          {error && <div className="error-text mt">{error}</div>}
         </Modal>
       )}
     </div>
