@@ -13,7 +13,30 @@ import type { User } from '../types';
 
 export const authRouter = Router();
 
+// Brute-force protection: a 4-digit PIN space is small, so failed attempts are
+// throttled per source IP — 5 misses inside 10 minutes locks that IP for 5 minutes.
+const MAX_FAILS = 5;
+const FAIL_WINDOW_MS = 10 * 60 * 1000;
+const LOCKOUT_MS = 5 * 60 * 1000;
+const failures = new Map<string, { count: number; firstAt: number; lockedUntil: number }>();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of failures) {
+    if (entry.lockedUntil < now && now - entry.firstAt > FAIL_WINDOW_MS) failures.delete(ip);
+  }
+}, 60_000).unref();
+
 authRouter.post('/login', (req, res) => {
+  const ip = req.ip ?? 'unknown';
+  const now = Date.now();
+  const entry = failures.get(ip);
+  if (entry && entry.lockedUntil > now) {
+    const wait = Math.ceil((entry.lockedUntil - now) / 1000);
+    res.status(429).json({ error: `Too many failed attempts — try again in ${wait}s` });
+    return;
+  }
+
   const { pin } = req.body as { pin?: string };
   if (!pin || typeof pin !== 'string' || !/^\d{4,8}$/.test(pin)) {
     throw badRequest('PIN must be 4-8 digits');
@@ -21,9 +44,21 @@ authRouter.post('/login', (req, res) => {
   const users = db.prepare('SELECT * FROM users WHERE active = 1').all() as User[];
   const user = users.find((u) => verifyPin(pin, u.pin_hash));
   if (!user) {
+    const cur =
+      entry && now - entry.firstAt <= FAIL_WINDOW_MS
+        ? { ...entry, count: entry.count + 1 }
+        : { count: 1, firstAt: now, lockedUntil: 0 };
+    if (cur.count >= MAX_FAILS) {
+      cur.lockedUntil = now + LOCKOUT_MS;
+      cur.count = 0;
+      cur.firstAt = now;
+      audit(null, 'auth.lockout', { ip });
+    }
+    failures.set(ip, cur);
     res.status(401).json({ error: 'Invalid PIN' });
     return;
   }
+  failures.delete(ip);
   const token = createSession(user.id);
   audit(user.id, 'auth.login');
   res.json({ token, user: { id: user.id, name: user.name, role: user.role } });

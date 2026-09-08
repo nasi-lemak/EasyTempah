@@ -8,6 +8,7 @@ const myTax: TaxSettings = {
   taxOnService: true,
   serviceRate: 10,
   serviceLabel: 'Service 10%',
+  serviceOrderTypes: ['dine_in'],
   cashRoundingCents: 5,
 };
 
@@ -34,6 +35,7 @@ describe('computeTotals', () => {
       lines: [{ qty: 1, unit_price_cents: 1000, modifiers: [] }],
       discountType: null,
       discountValue: 0,
+      orderType: 'dine_in',
       tax: noTax,
     });
     expect(t).toEqual({
@@ -50,6 +52,7 @@ describe('computeTotals', () => {
       lines: [{ qty: 1, unit_price_cents: 10000, modifiers: [] }],
       discountType: null,
       discountValue: 0,
+      orderType: 'dine_in',
       tax: myTax,
     });
     expect(t.service_cents).toBe(1000); // 10%
@@ -62,6 +65,7 @@ describe('computeTotals', () => {
       lines: [{ qty: 1, unit_price_cents: 10000, modifiers: [] }],
       discountType: null,
       discountValue: 0,
+      orderType: 'dine_in',
       tax: { ...myTax, taxOnService: false },
     });
     expect(t.tax_cents).toBe(600);
@@ -73,6 +77,7 @@ describe('computeTotals', () => {
       lines: [{ qty: 2, unit_price_cents: 5000, modifiers: [] }],
       discountType: 'percent',
       discountValue: 10,
+      orderType: 'dine_in',
       tax: myTax,
     });
     expect(t.discount_cents).toBe(1000);
@@ -86,6 +91,7 @@ describe('computeTotals', () => {
       lines: [{ qty: 1, unit_price_cents: 500, modifiers: [] }],
       discountType: 'fixed',
       discountValue: 99999,
+      orderType: 'dine_in',
       tax: noTax,
     });
     expect(t.discount_cents).toBe(500);
@@ -97,9 +103,47 @@ describe('computeTotals', () => {
       lines: [{ qty: 1, unit_price_cents: 500, modifiers: [] }],
       discountType: 'percent',
       discountValue: 150,
+      orderType: 'dine_in',
       tax: noTax,
     });
     expect(t.discount_cents).toBe(500);
+  });
+});
+
+describe('service charge order-type rules', () => {
+  it('skips the service charge for takeaway when configured dine-in only', () => {
+    const t = computeTotals({
+      lines: [{ qty: 1, unit_price_cents: 10000, modifiers: [] }],
+      discountType: null,
+      discountValue: 0,
+      orderType: 'takeaway',
+      tax: myTax,
+    });
+    expect(t.service_cents).toBe(0);
+    expect(t.tax_cents).toBe(600); // 6% of 10000, no service in the base
+    expect(t.total_cents).toBe(10600);
+  });
+
+  it('applies it to delivery when the type is enabled', () => {
+    const t = computeTotals({
+      lines: [{ qty: 1, unit_price_cents: 10000, modifiers: [] }],
+      discountType: null,
+      discountValue: 0,
+      orderType: 'delivery',
+      tax: { ...myTax, serviceOrderTypes: ['dine_in', 'delivery'] },
+    });
+    expect(t.service_cents).toBe(1000);
+  });
+
+  it('never charges service when the list is empty (fully toggled off)', () => {
+    const t = computeTotals({
+      lines: [{ qty: 1, unit_price_cents: 10000, modifiers: [] }],
+      discountType: null,
+      discountValue: 0,
+      orderType: 'dine_in',
+      tax: { ...myTax, serviceOrderTypes: [] },
+    });
+    expect(t.service_cents).toBe(0);
   });
 });
 

@@ -1,4 +1,4 @@
-import type { OrderItemModifierSnapshot, TaxSettings } from '../types';
+import type { OrderItemModifierSnapshot, OrderType, TaxSettings } from '../types';
 
 export interface LineInput {
   qty: number;
@@ -10,6 +10,7 @@ export interface TotalsInput {
   lines: LineInput[]; // active (non-cancelled) lines only
   discountType: 'percent' | 'fixed' | null;
   discountValue: number; // percent 0-100 or fixed cents
+  orderType: OrderType; // service charge applies only to configured order types
   tax: TaxSettings;
 }
 
@@ -39,7 +40,9 @@ export function computeTotals(input: TotalsInput): Totals {
   discount = Math.min(discount, subtotal);
 
   const discounted = subtotal - discount;
-  const service = Math.round((discounted * input.tax.serviceRate) / 100);
+  const serviceApplies =
+    input.tax.serviceRate > 0 && (input.tax.serviceOrderTypes ?? ['dine_in']).includes(input.orderType);
+  const service = serviceApplies ? Math.round((discounted * input.tax.serviceRate) / 100) : 0;
   const taxBase = input.tax.taxOnService ? discounted + service : discounted;
   const tax = Math.round((taxBase * input.tax.taxRate) / 100);
 

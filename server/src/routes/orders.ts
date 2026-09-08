@@ -100,11 +100,25 @@ ordersRouter.post('/:id/items', (req: AuthedRequest, res) => {
 ordersRouter.patch('/:id/items/:lineId', (req: AuthedRequest, res) => {
   const orderId = Number(req.params.id);
   const lineId = Number(req.params.lineId);
-  const b = req.body as { qty?: number; notes?: string | null; cancel?: boolean };
+  const b = req.body as {
+    qty?: number;
+    notes?: string | null;
+    cancel?: boolean;
+    unit_price_cents?: number;
+  };
+  if (b.unit_price_cents !== undefined && !['manager', 'admin'].includes(req.user!.role)) {
+    res.status(403).json({ error: 'Manager rights required to override a price' });
+    return;
+  }
   if (b.cancel) {
     cancelLine(orderId, lineId, req.user!.id);
   } else {
-    updateLine(orderId, lineId, { qty: b.qty, notes: b.notes }, req.user!.id);
+    updateLine(
+      orderId,
+      lineId,
+      { qty: b.qty, notes: b.notes, unit_price_cents: b.unit_price_cents },
+      req.user!.id,
+    );
   }
   publish('orders');
   publish('kds');

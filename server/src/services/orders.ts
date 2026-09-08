@@ -74,6 +74,7 @@ function recomputeTotals(orderId: number): void {
     })),
     discountType: order.discount_type,
     discountValue: order.discount_value,
+    orderType: order.type,
     tax: getTaxSettings(),
   });
   const total = totals.total_cents + order.rounding_cents;
@@ -309,23 +310,48 @@ export function guestTableState(token: string): {
 }
 
 export const updateLine = db.transaction(
-  (orderId: number, lineId: number, patch: { qty?: number; notes?: string | null }, userId: number): void => {
+  (
+    orderId: number,
+    lineId: number,
+    patch: { qty?: number; notes?: string | null; unit_price_cents?: number },
+    userId: number,
+  ): void => {
     requireOpenOrder(orderId);
     const line = db
       .prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?')
       .get(lineId, orderId) as OrderItem | undefined;
     if (!line) throw notFound('Order line not found');
     if (line.status !== 'pending') throw conflict('Only pending lines can be edited; cancel instead');
-    if (patch.qty !== undefined) {
-      if (!Number.isInteger(patch.qty) || patch.qty < 1 || patch.qty > 999) throw badRequest('Invalid quantity');
-      const mods = JSON.parse(line.modifiers_json) as OrderItemModifierSnapshot[];
-      const modSum = mods.reduce((s, m) => s + m.price_delta_cents, 0);
-      db.prepare('UPDATE order_items SET qty = ?, line_total_cents = ? WHERE id = ?').run(
-        patch.qty,
-        patch.qty * (line.unit_price_cents + modSum),
+
+    const mods = JSON.parse(line.modifiers_json) as OrderItemModifierSnapshot[];
+    const modSum = mods.reduce((s, m) => s + m.price_delta_cents, 0);
+
+    // Manager price override / per-item discount: the route gates this by role.
+    if (patch.unit_price_cents !== undefined) {
+      if (!Number.isInteger(patch.unit_price_cents) || patch.unit_price_cents < 0) {
+        throw badRequest('Invalid price');
+      }
+      db.prepare('UPDATE order_items SET unit_price_cents = ? WHERE id = ?').run(
+        patch.unit_price_cents,
         lineId,
       );
+      line.unit_price_cents = patch.unit_price_cents;
+      audit(userId, 'order_line.price_override', {
+        orderId,
+        lineId,
+        name: line.name,
+        newPrice: patch.unit_price_cents,
+      });
     }
+    if (patch.qty !== undefined) {
+      if (!Number.isInteger(patch.qty) || patch.qty < 1 || patch.qty > 999) throw badRequest('Invalid quantity');
+      db.prepare('UPDATE order_items SET qty = ? WHERE id = ?').run(patch.qty, lineId);
+      line.qty = patch.qty;
+    }
+    db.prepare('UPDATE order_items SET line_total_cents = ? WHERE id = ?').run(
+      line.qty * (line.unit_price_cents + modSum),
+      lineId,
+    );
     if (patch.notes !== undefined) {
       db.prepare('UPDATE order_items SET notes = ? WHERE id = ?').run(patch.notes, lineId);
     }

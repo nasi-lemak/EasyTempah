@@ -35,7 +35,8 @@ kitchen displays and the back office, all over the local network.
 - Menu management (categories, items, modifier groups) without restarts — changes push live to terminals
 - Inventory: per-item stock tracking, automatic deduction on kitchen send, restock on void/cancel, adjustment audit trail, low-stock badges and sold-out lockout on the POS
 - Users & roles (admin / manager / cashier / kitchen) with PIN sign-in
-- Business settings: identity, receipt footer, tax (SST), service charge, cash rounding
+- Business settings: identity, receipt footer, tax, service charge (per-order-type — dine-in only by default per MY/SG convention, fully toggleable), cash rounding, and one-click country presets (🇲🇾 RM/SST 6%, 🇸🇬 S$/GST 9%) — every value stays individually editable for other markets
+- Hardening & ops: PIN brute-force lockout (5 failures → 5-minute IP lock), manager-gated per-line price overrides, and automatic daily SQLite backups (14 kept) with a back-up-now button
 - Audit log of sensitive actions (voids, discounts, shift events)
 
 **Under the hood** — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the

@@ -34,7 +34,19 @@ export default function SettingsPage() {
   const [platforms, setPlatforms] = useState<PlatformsSettings | null>(null);
   const [saved, setSaved] = useState(false);
   const [testMsg, setTestMsg] = useState('');
+  const [backupMsg, setBackupMsg] = useState('');
   const [error, setError] = useState('');
+
+  const backupNow = async () => {
+    setBackupMsg('');
+    setError('');
+    try {
+      const r = await api.post<{ file: string }>('/api/settings/backup');
+      setBackupMsg(`Saved ${r.file} ✓`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Backup failed');
+    }
+  };
 
   useEffect(() => {
     api
@@ -128,9 +140,50 @@ export default function SettingsPage() {
     </div>
   );
 
+  const applyPreset = (preset: 'MY' | 'SG') => {
+    if (preset === 'MY') {
+      setBusiness({ ...business, country: 'MY', currency: 'MYR', currencySymbol: 'RM' });
+      setTax({
+        ...tax,
+        taxRate: 6,
+        taxLabel: 'SST 6%',
+        taxOnService: true,
+        serviceOrderTypes: ['dine_in'],
+        cashRoundingCents: 5,
+      });
+    } else {
+      setBusiness({ ...business, country: 'SG', currency: 'SGD', currencySymbol: 'S$' });
+      setTax({
+        ...tax,
+        taxRate: 9,
+        taxLabel: 'GST 9%',
+        taxOnService: true,
+        serviceOrderTypes: ['dine_in'],
+        cashRoundingCents: 5,
+      });
+      setEinvoice({ ...einvoice, enabled: false }); // MyInvois is Malaysia-only
+    }
+  };
+
   return (
     <div style={{ maxWidth: 640 }}>
       <h1>Settings</h1>
+      <div className="panel mb">
+        <h2>Country preset</h2>
+        <p className="muted small">
+          Fills currency, tax and service-charge conventions below — review, then Save. Everything
+          stays individually editable for other markets.
+        </p>
+        <div className="row wrap">
+          <button className={business.country === 'MY' ? 'primary' : ''} onClick={() => applyPreset('MY')}>
+            🇲🇾 Malaysia — RM, SST 6%, 5 sen rounding
+          </button>
+          <button className={business.country === 'SG' ? 'primary' : ''} onClick={() => applyPreset('SG')}>
+            🇸🇬 Singapore — S$, GST 9%, 5¢ rounding
+          </button>
+        </div>
+      </div>
+
       <div className="panel mb">
         <h2>Business</h2>
         {bField('name', 'Business name')}
@@ -170,6 +223,32 @@ export default function SettingsPage() {
           <button className={tax.taxOnService ? 'primary' : ''} onClick={() => setTax({ ...tax, taxOnService: !tax.taxOnService })}>
             {tax.taxOnService ? 'Tax applies on service charge' : 'Tax on subtotal only'}
           </button>
+        </div>
+        <label>Service charge applies to</label>
+        <div className="row wrap mb">
+          {([['dine_in', 'Dine-in'], ['takeaway', 'Takeaway'], ['delivery', 'Delivery']] as const).map(([key, label]) => {
+            const on = tax.serviceOrderTypes.includes(key);
+            return (
+              <button
+                key={key}
+                className={on ? 'primary' : ''}
+                onClick={() =>
+                  setTax({
+                    ...tax,
+                    serviceOrderTypes: on
+                      ? tax.serviceOrderTypes.filter((t) => t !== key)
+                      : [...tax.serviceOrderTypes, key],
+                  })
+                }
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="muted small mb">
+          Turn all three off (or set the rate to 0) to never charge it. QR guest orders follow the
+          dine-in rule.
         </div>
         <label>Cash rounding (sen)</label>
         <div className="row wrap">
@@ -358,6 +437,16 @@ export default function SettingsPage() {
         {printerRow('kitchen', 'Kitchen')}
         {printerRow('bar', 'Bar')}
         {testMsg && <div style={{ color: 'var(--accent)' }}>{testMsg}</div>}
+      </div>
+
+      <div className="panel mb">
+        <h2>Backups</h2>
+        <p className="muted small">
+          A snapshot of the database is taken automatically at startup and daily (14 kept, in
+          <code> server/data/backups/</code>). Copy them off this machine regularly.
+        </p>
+        <button onClick={backupNow}>Back up now</button>
+        {backupMsg && <span style={{ color: 'var(--accent)', marginLeft: '0.8rem' }}>{backupMsg}</span>}
       </div>
 
       <button className="primary" onClick={save}>Save settings</button>

@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import './db/connection'; // opens DB + applies migrations
+import { scheduleBackups } from './services/backup';
 import { requireAuth } from './middleware/auth';
 import { errorHandler } from './middleware/errors';
 import { addClient } from './realtime/bus';
@@ -64,6 +65,8 @@ if (fs.existsSync(clientDist)) {
 }
 
 app.use(errorHandler);
+
+scheduleBackups();
 
 const PORT = Number(process.env.PORT) || 4000;
 app.listen(PORT, () => {

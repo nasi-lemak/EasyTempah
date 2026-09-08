@@ -14,6 +14,7 @@ export const DEFAULT_BUSINESS: BusinessSettings = {
   address: '1 Jalan Contoh, 50000 Kuala Lumpur',
   phone: '+60 3-0000 0000',
   registrationNo: '',
+  country: 'MY',
   currency: 'MYR',
   currencySymbol: 'RM',
   receiptFooter: 'Terima kasih! Please come again.',
@@ -25,6 +26,7 @@ export const DEFAULT_TAX: TaxSettings = {
   taxOnService: true,
   serviceRate: 10,
   serviceLabel: 'Service Charge 10%',
+  serviceOrderTypes: ['dine_in'],
   cashRoundingCents: 5,
 };
 

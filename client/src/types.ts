@@ -159,6 +159,7 @@ export interface TaxSettings {
   taxOnService: boolean;
   serviceRate: number;
   serviceLabel: string;
+  serviceOrderTypes: OrderType[];
   cashRoundingCents: number;
 }
 
@@ -269,6 +270,7 @@ export interface BusinessSettings {
   address: string;
   phone: string;
   registrationNo: string;
+  country: string;
   currency: string;
   currencySymbol: string;
   receiptFooter: string;

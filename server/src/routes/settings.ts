@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { AuthedRequest, requireAuth, requireRole } from '../middleware/auth';
 import { badRequest } from '../middleware/errors';
 import { audit } from '../services/audit';
+import { backupNow, listBackups } from '../services/backup';
 import {
   DEFAULT_BUSINESS,
   DEFAULT_TAX,
@@ -72,6 +73,12 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
     const merged = { ...DEFAULT_TAX, ...getTaxSettings(), ...tax };
     if (merged.taxRate < 0 || merged.taxRate > 100 || merged.serviceRate < 0 || merged.serviceRate > 100) {
       throw badRequest('Rates must be 0-100');
+    }
+    if (
+      !Array.isArray(merged.serviceOrderTypes) ||
+      merged.serviceOrderTypes.some((t) => !['dine_in', 'takeaway', 'delivery'].includes(t))
+    ) {
+      throw badRequest('serviceOrderTypes must be a list of order types');
     }
     if (![0, 1, 5, 10, 25, 50, 100].includes(merged.cashRoundingCents)) {
       throw badRequest('cashRoundingCents must be one of 0, 5, 10, 25, 50, 100');
@@ -156,4 +163,18 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
   }
   audit(req.user!.id, 'settings.update');
   res.json(fullPayload());
+});
+
+/** Manual database backup (admin). Scheduled backups run daily regardless. */
+settingsRouter.post('/backup', requireRole('admin'), (req: AuthedRequest, res, next) => {
+  backupNow()
+    .then((file) => {
+      audit(req.user!.id, 'backup.manual', { file });
+      res.json({ ok: true, file: file.split('/').pop(), backups: listBackups() });
+    })
+    .catch(next);
+});
+
+settingsRouter.get('/backups', requireRole('admin'), (_req, res) => {
+  res.json({ backups: listBackups() });
 });

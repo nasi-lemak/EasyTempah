@@ -168,6 +168,8 @@ export interface TaxSettings {
   taxOnService: boolean;
   serviceRate: number; // percent, e.g. 10
   serviceLabel: string;
+  /** Order types the service charge applies to; MY/SG convention is dine-in only. Empty = never. */
+  serviceOrderTypes: OrderType[];
   cashRoundingCents: number; // 5 = round cash totals to nearest 5 cents; 0 = off
 }
 
@@ -291,6 +293,7 @@ export interface BusinessSettings {
   address: string;
   phone: string;
   registrationNo: string;
+  country: string; // ISO-ish marker for presets/reporting, e.g. "MY", "SG"
   currency: string; // "MYR"
   currencySymbol: string; // "RM"
   receiptFooter: string;

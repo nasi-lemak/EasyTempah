@@ -265,6 +265,30 @@ export default function Pos() {
                         <>
                           <button className="qty-btn" onClick={() => line.qty > 1 ? changeQty(line.id, line.qty - 1) : cancelLine(line.id)}>−</button>
                           <button className="qty-btn" onClick={() => changeQty(line.id, line.qty + 1)}>+</button>
+                          {hasRole(user, 'manager') && (
+                            <button
+                              className="ghost small"
+                              onClick={() => {
+                                const v = window.prompt(
+                                  `New unit price for ${line.name} (RM)`,
+                                  (line.unit_price_cents / 100).toFixed(2),
+                                );
+                                if (v === null) return;
+                                const cents = Math.round(parseFloat(v) * 100);
+                                if (Number.isInteger(cents) && cents >= 0) {
+                                  run(async () => {
+                                    const r = await api.patch<{ order: Order }>(
+                                      `/api/orders/${order.id}/items/${line.id}`,
+                                      { unit_price_cents: cents },
+                                    );
+                                    setOrder(r.order);
+                                  });
+                                }
+                              }}
+                            >
+                              price
+                            </button>
+                          )}
                         </>
                       )}
                       <div className="grow" />
