@@ -45,10 +45,24 @@ interface TokenCache {
 
 let tokenCache: TokenCache | null = null;
 
+/** A slow LHDN must degrade crisply, not hold a till request for minutes. */
+const HTTP_TIMEOUT_MS = 15_000;
+
+async function lhdnFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      throw new ApiError(502, `MyInvois did not respond within ${HTTP_TIMEOUT_MS / 1000}s — try again later`);
+    }
+    throw new ApiError(502, `MyInvois unreachable: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 async function getToken(settings: EinvoiceSettings): Promise<string> {
   if (tokenCache && tokenCache.expiresAt > Date.now() + 60_000) return tokenCache.token;
   const base = BASE_URLS[settings.environment as 'sandbox' | 'production'];
-  const res = await fetch(`${base}/connect/token`, {
+  const res = await lhdnFetch(`${base}/connect/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -104,7 +118,7 @@ export async function submitDocument(
 
   const base = BASE_URLS[settings.environment];
   const token = await getToken(settings);
-  const res = await fetch(`${base}/api/v1.0/documentsubmissions`, {
+  const res = await lhdnFetch(`${base}/api/v1.0/documentsubmissions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({
@@ -144,7 +158,7 @@ export async function getDocumentDetails(
 
   const base = BASE_URLS[settings.environment];
   const token = await getToken(settings);
-  const res = await fetch(`${base}/api/v1.0/documents/${uuid}/details`, {
+  const res = await lhdnFetch(`${base}/api/v1.0/documents/${uuid}/details`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new ApiError(502, `MyInvois status check failed (${res.status})`);
