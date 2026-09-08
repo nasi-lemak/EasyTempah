@@ -133,6 +133,30 @@ as a scan-to-pay code at the till for e-wallet channels. Shift summaries and
 reports break revenue down per channel; expected-drawer math remains keyed on
 the cash kind only.
 
+### Gateway auto-confirmation (payment intents + webhooks)
+
+Without a gateway, wallet payments are sight-verified (the Malaysian standee-QR
+norm). With one enabled, `services/gateway.ts` closes the loop: the cashier's
+channel choice creates a **payment intent** for the order's balance, the till
+shows the QR and polls, and the gateway's webhook confirms the payment
+automatically. The public `/api/payment-webhooks/:provider` endpoint is mounted
+before the JSON body parser so HMAC-SHA256 signatures verify over the raw body
+(X-Signature header); everything else about it is defensive — unknown provider
+404s, disabled gateway 409s, bad signatures 401.
+
+Matching has two modes. **Dynamic QR** (gateway issues per-transaction codes):
+the webhook names the intent id, so matching is exact and amount-checked.
+**Static QR** (one laminated counter code): events carry only an amount, so the
+match is the single pending intent with that amount inside the TTL window — two
+candidates means the system refuses to guess (`ambiguous`) and the cashier
+falls back to manual confirmation, which always remains available. Consumed
+gateway references are replay-guarded, every webhook is logged to
+`webhook_events` with its outcome, intents expire after 3 minutes, and one
+live intent per order keeps lanes unambiguous. The `mock` provider simulates
+the entire loop (signed webhook included) for demos and tests; `generic`
+accepts any acquirer that can POST `{amount_cents, reference, intent_id?}`
+signed with the shared secret.
+
 ## LHDN MyInvois e-invoicing
 
 `services/einvoice/` implements Malaysia's e-invoice mandate in three layers:

@@ -4,6 +4,7 @@ import { useStore } from '../store';
 import type {
   BusinessSettings,
   EinvoiceSettings,
+  GatewaySettings,
   PaymentsSettings,
   PrintersSettings,
   TaxSettings,
@@ -15,6 +16,7 @@ type SettingsPayload = {
   printers: PrintersSettings;
   payments: PaymentsSettings;
   einvoice: EinvoiceSettings;
+  gateway: GatewaySettings;
 };
 
 export default function SettingsPage() {
@@ -25,6 +27,8 @@ export default function SettingsPage() {
   const [payments, setPayments] = useState<PaymentsSettings | null>(null);
   const [einvoice, setEinvoice] = useState<EinvoiceSettings | null>(null);
   const [einvoiceSecret, setEinvoiceSecret] = useState('');
+  const [gateway, setGateway] = useState<GatewaySettings | null>(null);
+  const [gatewaySecret, setGatewaySecret] = useState('');
   const [saved, setSaved] = useState(false);
   const [testMsg, setTestMsg] = useState('');
   const [error, setError] = useState('');
@@ -38,11 +42,14 @@ export default function SettingsPage() {
         setPrinters(r.printers);
         setPayments(r.payments);
         setEinvoice(r.einvoice);
+        setGateway(r.gateway);
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, []);
 
-  if (!business || !tax || !printers || !payments || !einvoice) return <div className="muted">Loading…</div>;
+  if (!business || !tax || !printers || !payments || !einvoice || !gateway) {
+    return <div className="muted">Loading…</div>;
+  }
 
   const save = async () => {
     setError('');
@@ -54,13 +61,16 @@ export default function SettingsPage() {
         printers,
         payments,
         einvoice: { ...einvoice, ...(einvoiceSecret.trim() ? { clientSecret: einvoiceSecret.trim() } : {}) },
+        gateway: { ...gateway, ...(gatewaySecret.trim() ? { webhookSecret: gatewaySecret.trim() } : {}) },
       });
       setBusiness(r.business);
       setTax(r.tax);
       setPrinters(r.printers);
       setPayments(r.payments);
       setEinvoice(r.einvoice);
+      setGateway(r.gateway);
       setEinvoiceSecret('');
+      setGatewaySecret('');
       setSettings(r);
       setSaved(true);
     } catch (e) {
@@ -201,6 +211,39 @@ export default function SettingsPage() {
         <div className="muted small mt">
           Powers both the printable counter standee and the on-screen QR shown when a cashier
           selects a wallet. Save before printing.
+        </div>
+      </div>
+
+      <div className="panel mb">
+        <h2>Payment gateway (webhook auto-confirmation)</h2>
+        <p className="muted small">
+          When enabled, wallet/card payments create an intent and confirm automatically from the
+          gateway's webhook instead of cashier sight-verification. mock simulates a gateway for
+          testing; generic works with any acquirer that can POST the documented JSON, signed with
+          HMAC-SHA256 of the raw body in the X-Signature header.
+        </p>
+        <div className="row wrap mb">
+          <button className={gateway.enabled ? 'primary' : ''} onClick={() => setGateway({ ...gateway, enabled: !gateway.enabled })}>
+            {gateway.enabled ? 'Enabled' : 'Disabled'}
+          </button>
+          {(['mock', 'generic'] as const).map((p) => (
+            <button key={p} className={gateway.provider === p ? 'primary' : ''} onClick={() => setGateway({ ...gateway, provider: p })}>
+              {p}
+            </button>
+          ))}
+          <button className={gateway.dynamicQr ? 'primary' : ''} onClick={() => setGateway({ ...gateway, dynamicQr: !gateway.dynamicQr })}>
+            {gateway.dynamicQr ? 'Dynamic QR (exact match)' : 'Static QR (amount match)'}
+          </button>
+        </div>
+        <div className="row">
+          <div className="grow mb">
+            <label>Webhook secret {gateway.hasWebhookSecret ? '(stored — blank keeps it)' : ''}</label>
+            <input type="password" value={gatewaySecret} onChange={(e) => setGatewaySecret(e.target.value)} style={{ width: '100%' }} />
+          </div>
+          <div className="grow mb">
+            <label>Webhook URL (configure at your gateway)</label>
+            <input readOnly value={`${window.location.origin}/api/payment-webhooks/${gateway.provider}`} style={{ width: '100%' }} onFocus={(e) => e.target.select()} />
+          </div>
         </div>
       </div>
 

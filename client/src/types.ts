@@ -103,6 +103,7 @@ export interface Payment {
   id: number;
   order_id: number;
   method: PaymentMethod;
+  channel: string | null;
   amount_cents: number;
   tendered_cents: number | null;
   change_cents: number | null;
@@ -169,6 +170,28 @@ export interface PaymentChannel {
 export interface PaymentsSettings {
   channels: PaymentChannel[];
   ewalletQrPayload: string;
+}
+
+export interface GatewaySettings {
+  enabled: boolean;
+  provider: 'mock' | 'generic';
+  hasWebhookSecret: boolean;
+  dynamicQr: boolean;
+}
+
+export interface PaymentIntent {
+  id: number;
+  order_id: number;
+  channel_key: string;
+  channel_label: string;
+  kind: PaymentMethod;
+  amount_cents: number;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'expired';
+  provider: string;
+  provider_ref: string | null;
+  qr_payload: string | null;
+  created_at: string;
+  expires_at: number;
 }
 
 export type EinvoiceIdType = 'BRN' | 'NRIC' | 'PASSPORT' | 'ARMY';

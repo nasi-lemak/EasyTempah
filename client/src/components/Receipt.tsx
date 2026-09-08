@@ -122,7 +122,7 @@ export default function Receipt({
       {order.payments.map((p) => (
         <div key={p.id}>
           <div className="rrow">
-            <span>{METHOD_LABEL[p.method] ?? p.method}{p.reference ? ` (${p.reference})` : ''}</span>
+            <span>{p.channel ?? METHOD_LABEL[p.method] ?? p.method}{p.reference ? ` (${p.reference})` : ''}</span>
             <span>{money(p.amount_cents)}</span>
           </div>
           {p.method === 'cash' && p.tendered_cents != null && (

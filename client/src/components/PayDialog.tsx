@@ -1,8 +1,8 @@
 import QRCode from 'qrcode';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { useMoney, useStore } from '../store';
-import type { Order, PaymentChannel } from '../types';
+import type { Order, PaymentChannel, PaymentIntent } from '../types';
 import Modal from './Modal';
 
 const QUICK_NOTES = [1000, 2000, 5000, 10000];
@@ -28,6 +28,7 @@ export default function PayDialog({
   const money = useMoney();
   const tax = useStore((s) => s.tax);
   const payments = useStore((s) => s.payments);
+  const gateway = useStore((s) => s.gateway);
   const channels = useMemo(
     () => (payments?.channels ?? FALLBACK_CHANNELS).filter((c) => c.enabled),
     [payments],
@@ -43,8 +44,110 @@ export default function PayDialog({
   const [busy, setBusy] = useState(false);
   const [lastChange, setLastChange] = useState<number | null>(null);
   const [walletQr, setWalletQr] = useState<string | null>(null);
+  const [intent, setIntent] = useState<PaymentIntent | null>(null);
+  const [intentQr, setIntentQr] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const balance = order.total_cents - order.paid_cents;
+  const gatewayActive = !!gateway?.enabled && kind !== 'cash';
+
+  // Render the intent's dynamic QR (falls back to the static counter payload).
+  useEffect(() => {
+    let cancelled = false;
+    const payload = intent?.qr_payload || payments?.ewalletQrPayload || '';
+    if (intent && payload) {
+      QRCode.toDataURL(payload, { width: 200, margin: 1 }).then((url) => {
+        if (!cancelled) setIntentQr(url);
+      });
+    } else {
+      setIntentQr(null);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [intent, payments]);
+
+  // While an intent is pending, poll for webhook confirmation.
+  useEffect(() => {
+    if (!intent || intent.status !== 'pending') return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const r = await api.get<{ intent: PaymentIntent; order: Order }>(`/api/payments/intents/${intent.id}`);
+        if (r.intent.status === 'confirmed') {
+          setIntent(null);
+          if (r.order.status === 'paid') onPaid(r.order);
+          else {
+            onUpdated(r.order);
+          }
+        } else if (r.intent.status !== 'pending') {
+          setIntent(r.intent); // expired/cancelled — show it
+        }
+      } catch {
+        /* transient; keep polling */
+      }
+    }, 2500);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent?.id, intent?.status]);
+
+  // Switching channels abandons any pending request.
+  useEffect(() => {
+    setIntent((cur) => {
+      if (cur && cur.status === 'pending' && cur.channel_key !== channelKey) {
+        api.post(`/api/payments/intents/${cur.id}/cancel`).catch(() => {});
+        return null;
+      }
+      return cur;
+    });
+  }, [channelKey]);
+
+  const requestPayment = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const r = await api.post<{ intent: PaymentIntent }>('/api/payments/intents', {
+        order_id: order.id,
+        channel_key: channel?.key,
+      });
+      setIntent(r.intent);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to start payment');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancelIntent = async () => {
+    if (!intent) return;
+    try {
+      await api.post(`/api/payments/intents/${intent.id}/cancel`);
+    } catch {
+      /* already terminal */
+    }
+    setIntent(null);
+  };
+
+  const simulate = async () => {
+    if (!intent) return;
+    setError('');
+    try {
+      const r = await api.post<{ outcome: string; intent: PaymentIntent; order: Order }>(
+        `/api/payments/intents/${intent.id}/simulate`,
+      );
+      if (r.intent.status === 'confirmed') {
+        setIntent(null);
+        if (r.order.status === 'paid') onPaid(r.order);
+        else onUpdated(r.order);
+      } else {
+        setError(`Simulation outcome: ${r.outcome}`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Simulation failed');
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -190,6 +293,50 @@ export default function PayDialog({
             ))}
           </div>
           {roundingNote && <div className="muted small mb">{roundingNote}</div>}
+        </>
+      ) : gatewayActive && intent ? (
+        <div className="mb" style={{ textAlign: 'center' }}>
+          {intentQr && (
+            <img src={intentQr} alt="Payment QR" style={{ background: '#fff', padding: 8, borderRadius: 8 }} />
+          )}
+          {intent.status === 'pending' ? (
+            <>
+              <div style={{ fontWeight: 700, marginTop: '0.4rem' }}>
+                Waiting for {intent.channel_label} payment of {money(intent.amount_cents)}…
+              </div>
+              <div className="muted small mb">
+                Confirms automatically when the gateway notifies us.
+              </div>
+              <div className="row" style={{ justifyContent: 'center' }}>
+                {gateway?.provider === 'mock' && (
+                  <button onClick={simulate}>Simulate customer payment</button>
+                )}
+                <button className="danger" onClick={cancelIntent}>Cancel</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="error-text mt">Payment request {intent.status}.</div>
+              <button className="mt" onClick={() => setIntent(null)}>Back</button>
+            </>
+          )}
+        </div>
+      ) : gatewayActive ? (
+        <>
+          <button className="primary mb" onClick={requestPayment} disabled={busy}>
+            Request {channel?.label} payment · {money(balance)}
+          </button>
+          <div className="muted small mb">
+            Shows the payment QR and auto-confirms via the gateway. Or record a sighted payment
+            manually below.
+          </div>
+          <div className="mb">
+            <label>Manual — reference (txn id on customer's screen)</label>
+            <div className="row">
+              <input value={reference} onChange={(e) => setReference(e.target.value)} className="grow" />
+              <button onClick={() => pay(balance)} disabled={busy}>Record manually</button>
+            </div>
+          </div>
         </>
       ) : (
         <>

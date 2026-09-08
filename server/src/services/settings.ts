@@ -2,6 +2,7 @@ import { db } from '../db/connection';
 import type {
   BusinessSettings,
   EinvoiceSettings,
+  GatewaySettings,
   PaymentsSettings,
   PrintersSettings,
   TaxSettings,
@@ -101,6 +102,17 @@ export const DEFAULT_EINVOICE: EinvoiceSettings = {
 
 export function getEinvoiceSettings(): EinvoiceSettings {
   return getSetting('einvoice', DEFAULT_EINVOICE);
+}
+
+export const DEFAULT_GATEWAY: GatewaySettings = {
+  enabled: false,
+  provider: 'mock',
+  webhookSecret: '',
+  dynamicQr: true,
+};
+
+export function getGatewaySettings(): GatewaySettings {
+  return getSetting('gateway', DEFAULT_GATEWAY);
 }
 
 export function getPrintersSettings(): PrintersSettings {

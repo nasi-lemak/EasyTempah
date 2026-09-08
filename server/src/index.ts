@@ -12,6 +12,7 @@ import { inventoryRouter } from './routes/inventory';
 import { kdsRouter } from './routes/kds';
 import { menuRouter } from './routes/menu';
 import { ordersRouter } from './routes/orders';
+import { paymentsRouter, webhookRouter } from './routes/payments';
 import { printRouter } from './routes/print';
 import { reportsRouter } from './routes/reports';
 import { settingsRouter } from './routes/settings';
@@ -20,6 +21,8 @@ import { tablesRouter } from './routes/tables';
 import { usersRouter } from './routes/users';
 
 const app = express();
+// Webhooks need the raw body for HMAC verification — mount before the JSON parser.
+app.use('/api/payment-webhooks', express.raw({ type: '*/*', limit: '256kb' }), webhookRouter);
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, name: 'EasyTempah POS' }));
@@ -37,6 +40,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/print', printRouter);
 app.use('/api/einvoice', einvoiceRouter);
+app.use('/api/payments', paymentsRouter);
 
 // Server-Sent Events stream for realtime updates.
 app.get('/api/events', requireAuth, (req, res) => {

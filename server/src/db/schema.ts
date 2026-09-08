@@ -238,6 +238,37 @@ const MIGRATIONS: string[] = [
 
   ALTER TABLE orders ADD COLUMN einvoice_id INTEGER REFERENCES einvoices(id);
   `,
+  // v6 — payment gateway: intents + webhook auto-confirmation
+  `
+  CREATE TABLE payment_intents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL REFERENCES orders(id),
+    channel_key TEXT NOT NULL,
+    channel_label TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('cash','card','ewallet','other')),
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    status TEXT NOT NULL DEFAULT 'pending'
+      CHECK (status IN ('pending','confirmed','cancelled','expired')),
+    provider TEXT NOT NULL,
+    provider_ref TEXT,
+    qr_payload TEXT,
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at INTEGER NOT NULL
+  );
+  CREATE INDEX idx_intents_order ON payment_intents(order_id);
+  CREATE INDEX idx_intents_status ON payment_intents(status);
+
+  CREATE TABLE webhook_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    matched_intent_id INTEGER REFERENCES payment_intents(id),
+    outcome TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  `,
 ];
 
 export function applySchema(db: Database): void {

@@ -7,6 +7,7 @@ import {
   DEFAULT_TAX,
   getBusinessSettings,
   getEinvoiceSettings,
+  getGatewaySettings,
   getPaymentsSettings,
   getPrintersSettings,
   getTaxSettings,
@@ -15,6 +16,7 @@ import {
 import type {
   BusinessSettings,
   EinvoiceSettings,
+  GatewaySettings,
   PaymentsSettings,
   PrintersSettings,
   TaxSettings,
@@ -26,6 +28,11 @@ function maskedEinvoice(): Omit<EinvoiceSettings, 'clientSecret'> & { hasClientS
   return { ...rest, hasClientSecret: clientSecret.length > 0 };
 }
 
+function maskedGateway(): Omit<GatewaySettings, 'webhookSecret'> & { hasWebhookSecret: boolean } {
+  const { webhookSecret, ...rest } = getGatewaySettings();
+  return { ...rest, hasWebhookSecret: webhookSecret.length > 0 };
+}
+
 function fullPayload() {
   return {
     business: getBusinessSettings(),
@@ -33,6 +40,7 @@ function fullPayload() {
     printers: getPrintersSettings(),
     payments: getPaymentsSettings(),
     einvoice: maskedEinvoice(),
+    gateway: maskedGateway(),
   };
 }
 
@@ -45,12 +53,13 @@ settingsRouter.get('/', (_req, res) => {
 });
 
 settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
-  const { business, tax, printers, payments, einvoice } = req.body as {
+  const { business, tax, printers, payments, einvoice, gateway } = req.body as {
     business?: Partial<BusinessSettings>;
     tax?: Partial<TaxSettings>;
     printers?: Partial<PrintersSettings>;
     payments?: Partial<PaymentsSettings>;
     einvoice?: Partial<EinvoiceSettings>;
+    gateway?: Partial<GatewaySettings>;
   };
   if (business) {
     setSetting('business', { ...DEFAULT_BUSINESS, ...getBusinessSettings(), ...business });
@@ -112,6 +121,17 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
     }
     if (merged.enabled && !merged.supplierTin.trim()) throw badRequest('Supplier TIN required to enable e-invoicing');
     setSetting('einvoice', merged);
+  }
+  if (gateway) {
+    const current = getGatewaySettings();
+    const merged: GatewaySettings = {
+      ...current,
+      ...gateway,
+      webhookSecret: gateway.webhookSecret?.trim() ? gateway.webhookSecret.trim() : current.webhookSecret,
+    };
+    if (!['mock', 'generic'].includes(merged.provider)) throw badRequest('Gateway provider must be mock or generic');
+    if (merged.enabled && !merged.webhookSecret) throw badRequest('Webhook secret required to enable the gateway');
+    setSetting('gateway', merged);
   }
   audit(req.user!.id, 'settings.update');
   res.json(fullPayload());

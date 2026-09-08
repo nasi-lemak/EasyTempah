@@ -132,7 +132,7 @@ export function renderReceipt(
   p.rule();
 
   for (const pay of order.payments) {
-    p.cols(pay.method.toUpperCase() + (pay.reference ? ` (${pay.reference})` : ''), rm(pay.amount_cents, sym));
+    p.cols((pay.channel ?? pay.method.toUpperCase()) + (pay.reference ? ` (${pay.reference})` : ''), rm(pay.amount_cents, sym));
     if (pay.method === 'cash' && pay.tendered_cents != null) {
       p.cols('  Tendered', rm(pay.tendered_cents, sym));
       p.cols('  Change', rm(pay.change_cents ?? 0, sym));
