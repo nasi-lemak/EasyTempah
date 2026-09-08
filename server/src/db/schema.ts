@@ -275,6 +275,48 @@ const MIGRATIONS: string[] = [
   ALTER TABLE orders ADD COLUMN platform_ref TEXT;
   CREATE INDEX idx_orders_platform ON orders(platform);
   `,
+  // v8 — e-invoice credit notes: rebuild einvoices to widen the type CHECK and
+  // add refund_id. orders.einvoice_id links are parked while the referenced
+  // table is swapped, then restored (FKs are enforced during migrations).
+  `
+  CREATE TABLE _einv_links (order_id INTEGER PRIMARY KEY, einvoice_id INTEGER);
+  INSERT INTO _einv_links SELECT id, einvoice_id FROM orders WHERE einvoice_id IS NOT NULL;
+  UPDATE orders SET einvoice_id = NULL;
+
+  CREATE TABLE einvoices_v8 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER REFERENCES orders(id),
+    type TEXT NOT NULL CHECK (type IN ('invoice','consolidated','credit_note')),
+    status TEXT NOT NULL DEFAULT 'pending'
+      CHECK (status IN ('pending','submitted','valid','invalid','error')),
+    buyer_json TEXT,
+    document_json TEXT NOT NULL,
+    internal_id TEXT NOT NULL,
+    uuid TEXT,
+    long_id TEXT,
+    submission_uid TEXT,
+    error TEXT,
+    period TEXT,
+    total_cents INTEGER NOT NULL DEFAULT 0,
+    refund_id INTEGER REFERENCES refunds(id),
+    created_by INTEGER REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  INSERT INTO einvoices_v8 (id, order_id, type, status, buyer_json, document_json, internal_id,
+    uuid, long_id, submission_uid, error, period, total_cents, created_by, created_at, updated_at)
+    SELECT id, order_id, type, status, buyer_json, document_json, internal_id,
+      uuid, long_id, submission_uid, error, period, total_cents, created_by, created_at, updated_at
+    FROM einvoices;
+  DROP TABLE einvoices;
+  ALTER TABLE einvoices_v8 RENAME TO einvoices;
+  CREATE INDEX idx_einvoices_order ON einvoices(order_id);
+  CREATE INDEX idx_einvoices_status ON einvoices(status);
+
+  UPDATE orders SET einvoice_id = (SELECT einvoice_id FROM _einv_links WHERE _einv_links.order_id = orders.id)
+    WHERE id IN (SELECT order_id FROM _einv_links);
+  DROP TABLE _einv_links;
+  `,
 ];
 
 export function applySchema(db: Database): void {

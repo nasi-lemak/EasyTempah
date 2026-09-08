@@ -8,12 +8,17 @@
  */
 import { db } from '../../db/connection';
 import { badRequest, conflict, notFound } from '../../middleware/errors';
-import type { EinvoiceBuyer, EinvoiceRow, Order } from '../../types';
+import type { EinvoiceBuyer, EinvoiceRow, Order, Refund } from '../../types';
 import { audit } from '../audit';
 import { getOrder } from '../orders';
 import { getBusinessSettings, getEinvoiceSettings } from '../settings';
 import { getDocumentDetails, portalUrl, submitDocument } from './client';
-import { buildConsolidatedInvoice, buildOrderInvoice, type ConsolidatedOrder } from './ubl';
+import {
+  buildConsolidatedInvoice,
+  buildCreditNote,
+  buildOrderInvoice,
+  type ConsolidatedOrder,
+} from './ubl';
 
 const TIN_RE = /^(C\d{10,11}|IG\d{10,12}|D\d{10,11}|E\d{10,11}|F\d{10,11}|EI\d{11})$/;
 const ID_TYPES = ['BRN', 'NRIC', 'PASSPORT', 'ARMY'];
@@ -146,6 +151,57 @@ export async function createOrderEinvoice(
   const row = await submitRow(rowId);
   if (['invalid', 'error'].includes(row.status)) clearOrderLinks(rowId);
   return row;
+}
+
+/**
+ * Issue a credit note for a refund against an order that carries a VALID
+ * individual e-invoice. Returns null (a no-op, not an error) when there is
+ * nothing to credit against — un-invoiced or consolidated orders need no
+ * merchant credit note.
+ */
+export async function createCreditNoteForRefund(
+  refundId: number,
+  userId: number,
+): Promise<EinvoiceRow | null> {
+  const settings = getEinvoiceSettings();
+  if (!settings.enabled) return null;
+  const refund = db.prepare('SELECT * FROM refunds WHERE id = ?').get(refundId) as Refund | undefined;
+  if (!refund) throw notFound('Refund not found');
+  const existing = db
+    .prepare("SELECT * FROM einvoices WHERE refund_id = ? AND status IN ('pending','submitted','valid')")
+    .get(refundId) as EinvoiceRow | undefined;
+  if (existing) throw conflict(`Refund already has a credit note (status: ${existing.status})`);
+
+  const original = db
+    .prepare("SELECT * FROM einvoices WHERE order_id = ? AND type = 'invoice' AND status = 'valid'")
+    .get(refund.order_id) as EinvoiceRow | undefined;
+  if (!original?.uuid || !original.buyer_json) return null;
+
+  const order = getOrder(refund.order_id);
+  const refundTax =
+    order.total_cents > 0 ? Math.round((order.tax_cents * refund.amount_cents) / order.total_cents) : 0;
+  const buyer = JSON.parse(original.buyer_json) as EinvoiceBuyer;
+  const business = getBusinessSettings();
+  const internalId = `CN-${order.order_no}-${refundId}`;
+  const document = buildCreditNote({
+    internalId,
+    settings,
+    supplierName: business.name,
+    buyer,
+    refundGrossCents: refund.amount_cents,
+    refundTaxCents: refundTax,
+    reason: refund.reason,
+    original: { internalId: original.internal_id, uuid: original.uuid },
+  });
+
+  const info = db
+    .prepare(
+      `INSERT INTO einvoices (order_id, type, buyer_json, document_json, internal_id, total_cents, refund_id, created_by)
+       VALUES (?, 'credit_note', ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(refund.order_id, original.buyer_json, JSON.stringify(document), internalId, refund.amount_cents, refundId, userId);
+  audit(userId, 'einvoice.credit_note', { refundId, orderId: refund.order_id, amount: refund.amount_cents });
+  return submitRow(Number(info.lastInsertRowid));
 }
 
 export async function createConsolidatedEinvoice(period: string, userId: number): Promise<EinvoiceRow> {

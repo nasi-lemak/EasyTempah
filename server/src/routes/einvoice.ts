@@ -4,6 +4,7 @@ import { AuthedRequest, requireAuth, requireRole } from '../middleware/auth';
 import { notFound } from '../middleware/errors';
 import {
   createConsolidatedEinvoice,
+  createCreditNoteForRefund,
   createOrderEinvoice,
   einvoiceWithPortal,
   refreshRow,
@@ -26,6 +27,18 @@ einvoiceRouter.get('/orders/:orderId', (req, res) => {
     .prepare('SELECT * FROM einvoices WHERE order_id = ? ORDER BY id DESC LIMIT 1')
     .get(req.params.orderId) as EinvoiceRow | undefined;
   res.json({ einvoice: row ? einvoiceWithPortal(row) : null });
+});
+
+/** Retry a credit note for a refund (e.g. LHDN was down when the refund happened). */
+einvoiceRouter.post('/refunds/:refundId', (req: AuthedRequest, res, next) => {
+  createCreditNoteForRefund(Number(req.params.refundId), req.user!.id)
+    .then((row) =>
+      res.status(row ? 201 : 200).json({
+        einvoice: row ? einvoiceWithPortal(row) : null,
+        message: row ? undefined : 'No valid e-invoice to credit against — no credit note needed',
+      }),
+    )
+    .catch(next);
 });
 
 einvoiceRouter.post('/:id/refresh', (req, res, next) => {

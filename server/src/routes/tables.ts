@@ -8,17 +8,26 @@ import type { DiningTable } from '../types';
 export const tablesRouter = Router();
 tablesRouter.use(requireAuth);
 
-/** Tables with live occupancy and kitchen progress derived from open orders. */
+/**
+ * Tables with live occupancy and kitchen progress. A table can carry several
+ * open sibling orders after a bill split, so open-order data is aggregated:
+ * order_id points at the original (lowest id) bill, totals/covers are summed.
+ */
 tablesRouter.get('/', (_req, res) => {
   const tables = db
     .prepare(
-      `SELECT t.*, o.id AS order_id, o.order_no, o.total_cents, o.covers, o.opened_at AS order_opened_at,
-        (SELECT COUNT(*) FROM order_items oi
-          WHERE oi.order_id = o.id AND oi.status IN ('sent','preparing')) AS cooking_lines,
-        (SELECT COUNT(*) FROM order_items oi
-          WHERE oi.order_id = o.id AND oi.status = 'ready') AS ready_lines
+      `SELECT t.*,
+        (SELECT MIN(o.id) FROM orders o WHERE o.table_id = t.id AND o.status = 'open') AS order_id,
+        (SELECT o.order_no FROM orders o WHERE o.table_id = t.id AND o.status = 'open' ORDER BY o.id LIMIT 1) AS order_no,
+        (SELECT COUNT(*) FROM orders o WHERE o.table_id = t.id AND o.status = 'open') AS open_orders,
+        (SELECT SUM(o.total_cents) FROM orders o WHERE o.table_id = t.id AND o.status = 'open') AS total_cents,
+        (SELECT SUM(o.covers) FROM orders o WHERE o.table_id = t.id AND o.status = 'open') AS covers,
+        (SELECT MIN(o.opened_at) FROM orders o WHERE o.table_id = t.id AND o.status = 'open') AS order_opened_at,
+        (SELECT COUNT(*) FROM order_items oi JOIN orders o2 ON o2.id = oi.order_id
+          WHERE o2.table_id = t.id AND o2.status = 'open' AND oi.status IN ('sent','preparing')) AS cooking_lines,
+        (SELECT COUNT(*) FROM order_items oi JOIN orders o2 ON o2.id = oi.order_id
+          WHERE o2.table_id = t.id AND o2.status = 'open' AND oi.status = 'ready') AS ready_lines
        FROM dining_tables t
-       LEFT JOIN orders o ON o.table_id = t.id AND o.status = 'open'
        WHERE t.active = 1
        ORDER BY t.zone, t.name`,
     )

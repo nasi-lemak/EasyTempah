@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { apportionTax, buildConsolidatedInvoice, buildOrderInvoice, GENERAL_PUBLIC_TIN } from './ubl';
+import {
+  apportionTax,
+  buildConsolidatedInvoice,
+  buildCreditNote,
+  buildOrderInvoice,
+  GENERAL_PUBLIC_TIN,
+} from './ubl';
 import type { EinvoiceBuyer, EinvoiceSettings } from '../../types';
 import type { OrderWithLines } from '../orders';
 
@@ -120,6 +126,35 @@ describe('buildOrderInvoice', () => {
     const line = invoice.InvoiceLine[0];
     expect(line.Item[0].Description[0]._).toContain('Ayam Goreng');
     expect((line.TaxTotal[0].TaxAmount[0] as Amount)._).toBe(1.19);
+  });
+});
+
+describe('buildCreditNote', () => {
+  const doc = buildCreditNote({
+    internalId: 'CN-20260908-0001-1',
+    settings,
+    supplierName: 'EasyTempah Café',
+    buyer,
+    refundGrossCents: 1060,
+    refundTaxCents: 60,
+    reason: 'wrong order served',
+    original: { internalId: 'EINV-20260908-0001', uuid: 'ABC123DEF456' },
+  });
+  const invoice = inv(doc);
+
+  it('uses type code 02 and references the original document', () => {
+    expect(invoice.InvoiceTypeCode[0]._).toBe('02');
+    const ref = invoice.BillingReference[0].InvoiceDocumentReference[0];
+    expect(ref.ID[0]._).toBe('EINV-20260908-0001');
+    expect(ref.UUID[0]._).toBe('ABC123DEF456');
+  });
+
+  it('splits the gross refund into exclusive amount plus tax', () => {
+    const totals = invoice.LegalMonetaryTotal[0];
+    expect((totals.TaxExclusiveAmount[0] as Amount)._).toBe(10.0);
+    expect((totals.TaxInclusiveAmount[0] as Amount)._).toBe(10.6);
+    expect((totals.PayableAmount[0] as Amount)._).toBe(10.6);
+    expect(invoice.InvoiceLine[0].Item[0].Description[0]._).toContain('wrong order served');
   });
 });
 

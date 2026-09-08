@@ -281,7 +281,7 @@ export const guestSubmitOrder = db.transaction(
 
   const guestId = getGuestUserId();
   let order = db
-    .prepare("SELECT * FROM orders WHERE table_id = ? AND status = 'open'")
+    .prepare("SELECT * FROM orders WHERE table_id = ? AND status = 'open' ORDER BY id LIMIT 1")
     .get(table.id) as Order | undefined;
   if (!order) {
     const id = createOrder({ type: 'dine_in', table_id: table.id, covers: 1 }, guestId);
@@ -303,8 +303,10 @@ export function guestTableState(token: string): {
     .prepare('SELECT id, name, zone FROM dining_tables WHERE qr_token = ? AND active = 1')
     .get(token) as { id: number; name: string; zone: string } | undefined;
   if (!table) throw notFound('This ordering code is no longer valid');
+  // After a bill split, several open orders can share the table; guests see
+  // (and add to) the original bill.
   const open = db
-    .prepare("SELECT id FROM orders WHERE table_id = ? AND status = 'open'")
+    .prepare("SELECT id FROM orders WHERE table_id = ? AND status = 'open' ORDER BY id LIMIT 1")
     .get(table.id) as { id: number } | undefined;
   return { table, order: open ? getOrder(open.id) : null };
 }
@@ -513,9 +515,9 @@ export interface RefundInput {
   reason: string;
 }
 
-/** Refund part or all of a PAID order's takings. approvedBy must already be verified as manager+. */
+/** Refund part or all of a PAID order's takings. approvedBy must already be verified as manager+. Returns the refund id. */
 export const addRefund = db.transaction(
-  (orderId: number, input: RefundInput, userId: number, approvedBy: number): void => {
+  (orderId: number, input: RefundInput, userId: number, approvedBy: number): number => {
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Order | undefined;
     if (!order) throw notFound('Order not found');
     if (order.status !== 'paid') throw conflict('Only paid orders can be refunded');
@@ -527,7 +529,7 @@ export const addRefund = db.transaction(
       throw badRequest(`Refund exceeds the refundable balance (${refundable} sen left)`);
     }
     if (!input.reason.trim()) throw badRequest('Refund reason required');
-    db.prepare(
+    const info = db.prepare(
       `INSERT INTO refunds (order_id, method, amount_cents, reason, user_id, approved_by, shift_id)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     ).run(orderId, input.method, input.amount_cents, input.reason.trim(), userId, approvedBy, currentShiftId());
@@ -542,6 +544,7 @@ export const addRefund = db.transaction(
       reason: input.reason.trim(),
       approvedBy,
     });
+    return Number(info.lastInsertRowid);
   },
 );
 
@@ -561,6 +564,95 @@ export const voidOrder = db.transaction((orderId: number, reason: string, userId
     `UPDATE order_items SET status = 'cancelled' WHERE order_id = ? AND status != 'cancelled'`,
   ).run(orderId);
   audit(userId, 'order.void', { orderId, reason });
+});
+
+export interface SplitPick {
+  line_id: number;
+  qty: number;
+}
+
+/**
+ * Split a bill by items: move the picked lines (whole or partial quantities)
+ * onto a new sibling order on the same table, so each party pays separately.
+ * The table stays occupied until every sibling is settled.
+ */
+export const splitOrder = db.transaction((orderId: number, picks: SplitPick[], userId: number): number => {
+  const order = requireOpenOrder(orderId);
+  if (order.paid_cents > 0) throw conflict('Cannot split after partial payment — settle or refund first');
+  if (!Array.isArray(picks) || picks.length === 0) throw badRequest('Choose items to split off');
+
+  const active = db
+    .prepare("SELECT * FROM order_items WHERE order_id = ? AND status != 'cancelled'")
+    .all(orderId) as OrderItem[];
+  const byId = new Map(active.map((l) => [l.id, l]));
+  const totalUnits = active.reduce((s, l) => s + l.qty, 0);
+  let movedUnits = 0;
+  const seen = new Set<number>();
+  for (const p of picks) {
+    const line = byId.get(p.line_id);
+    if (!line) throw badRequest('Line not found on this order');
+    if (seen.has(p.line_id)) throw badRequest('Duplicate line in split');
+    seen.add(p.line_id);
+    if (!Number.isInteger(p.qty) || p.qty < 1 || p.qty > line.qty) throw badRequest('Invalid split quantity');
+    movedUnits += p.qty;
+  }
+  if (movedUnits >= totalUnits) throw badRequest('Cannot move every item — just pay the whole bill');
+
+  const info = db
+    .prepare(
+      `INSERT INTO orders (order_no, type, table_id, covers, notes, shift_id, opened_by, platform, platform_ref)
+       VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      nextOrderNo(),
+      order.type,
+      order.table_id,
+      order.notes,
+      currentShiftId(),
+      userId,
+      order.platform,
+      order.platform_ref,
+    );
+  const newId = Number(info.lastInsertRowid);
+
+  for (const p of picks) {
+    const line = byId.get(p.line_id)!;
+    if (p.qty === line.qty) {
+      db.prepare('UPDATE order_items SET order_id = ? WHERE id = ?').run(newId, line.id);
+    } else {
+      // Partial quantity: shrink the original row, clone the moved units.
+      const mods = JSON.parse(line.modifiers_json) as OrderItemModifierSnapshot[];
+      const perUnit = line.unit_price_cents + mods.reduce((s, m) => s + m.price_delta_cents, 0);
+      db.prepare('UPDATE order_items SET qty = ?, line_total_cents = ? WHERE id = ?').run(
+        line.qty - p.qty,
+        (line.qty - p.qty) * perUnit,
+        line.id,
+      );
+      db.prepare(
+        `INSERT INTO order_items (order_id, item_id, name, qty, unit_price_cents, modifiers_json, notes,
+           status, station, line_total_cents, source, sent_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        newId,
+        line.item_id,
+        line.name,
+        p.qty,
+        line.unit_price_cents,
+        line.modifiers_json,
+        line.notes,
+        line.status,
+        line.station,
+        p.qty * perUnit,
+        line.source,
+        line.sent_at,
+        line.created_at,
+      );
+    }
+  }
+  recomputeTotals(orderId);
+  recomputeTotals(newId);
+  audit(userId, 'order.split', { orderId, newId, picks });
+  return newId;
 });
 
 export const moveTable = db.transaction((orderId: number, tableId: number, userId: number): void => {

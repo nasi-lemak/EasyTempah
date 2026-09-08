@@ -30,6 +30,7 @@ export default function Pos() {
   const [modItem, setModItem] = useState<Item | null>(null);
   const [showPay, setShowPay] = useState(false);
   const [showDiscount, setShowDiscount] = useState(false);
+  const [showSplit, setShowSplit] = useState(false);
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
   const [showDelivery, setShowDelivery] = useState(false);
   const [error, setError] = useState('');
@@ -332,6 +333,14 @@ export default function Pos() {
                 Send{pendingCount > 0 ? ` (${pendingCount})` : ''}
               </button>
               <button
+                className="full"
+                onClick={() => setShowSplit(true)}
+                disabled={order.paid_cents > 0 || activeLines.reduce((s, l) => s + l.qty, 0) < 2}
+                title={order.paid_cents > 0 ? 'Cannot split after partial payment' : ''}
+              >
+                Split bill
+              </button>
+              <button
                 className="primary full"
                 onClick={() => setShowPay(true)}
                 disabled={activeLines.length === 0 || pendingCount > 0}
@@ -353,6 +362,16 @@ export default function Pos() {
       )}
       {showPay && (
         <PayDialog order={order} onUpdated={setOrder} onPaid={onPaid} onClose={() => setShowPay(false)} />
+      )}
+      {showSplit && (
+        <SplitDialog
+          order={order}
+          onDone={(newId) => {
+            setShowSplit(false);
+            navigate(`/pos/${newId}`);
+          }}
+          onClose={() => setShowSplit(false)}
+        />
       )}
       {showDiscount && (
         <DiscountDialog
@@ -387,6 +406,82 @@ export default function Pos() {
         </Modal>
       )}
     </div>
+  );
+}
+
+function SplitDialog({
+  order,
+  onDone,
+  onClose,
+}: {
+  order: Order;
+  onDone: (newOrderId: number) => void;
+  onClose: () => void;
+}) {
+  const money = useMoney();
+  const active = order.items.filter((l) => l.status !== 'cancelled');
+  const [picks, setPicks] = useState<Record<number, number>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const setPick = (lineId: number, qty: number, max: number) =>
+    setPicks((p) => ({ ...p, [lineId]: Math.max(0, Math.min(max, qty)) }));
+
+  const movedEstimate = active.reduce((sum, l) => {
+    const qty = picks[l.id] ?? 0;
+    return sum + Math.round((l.line_total_cents / l.qty) * qty);
+  }, 0);
+  const movedCount = Object.values(picks).reduce((s, q) => s + q, 0);
+  const totalUnits = active.reduce((s, l) => s + l.qty, 0);
+
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const lines = Object.entries(picks)
+        .filter(([, qty]) => qty > 0)
+        .map(([line_id, qty]) => ({ line_id: Number(line_id), qty }));
+      const r = await api.post<{ order: Order }>(`/api/orders/${order.id}/split`, { lines });
+      onDone(r.order.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Split failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title={`Split bill — #${order.order_no}`} onClose={onClose}>
+      <p className="muted small">Pick the items (and quantities) moving to a new bill.</p>
+      {active.map((l) => {
+        const qty = picks[l.id] ?? 0;
+        return (
+          <div key={l.id} className="row" style={{ padding: '0.35rem 0' }}>
+            <span className="grow">
+              {l.name} <span className="muted small">×{l.qty}</span>
+            </span>
+            <button className="qty-btn" onClick={() => setPick(l.id, qty - 1, l.qty)}>−</button>
+            <strong style={{ minWidth: '1.6rem', textAlign: 'center' }}>{qty}</strong>
+            <button className="qty-btn" onClick={() => setPick(l.id, qty + 1, l.qty)}>+</button>
+          </div>
+        );
+      })}
+      <div className="row mt">
+        <strong className="grow">Moving {movedCount} item{movedCount === 1 ? '' : 's'}</strong>
+        <strong className="mono">≈ {money(movedEstimate)}</strong>
+      </div>
+      <p className="muted small">Taxes and charges recalculate on each bill after the split.</p>
+      <button
+        className="primary"
+        style={{ width: '100%' }}
+        onClick={submit}
+        disabled={busy || movedCount === 0 || movedCount >= totalUnits}
+      >
+        {movedCount >= totalUnits ? 'Leave at least one item on this bill' : 'Split to new bill'}
+      </button>
+      {error && <div className="error-text mt">{error}</div>}
+    </Modal>
   );
 }
 

@@ -111,7 +111,7 @@ export default function Einvoices() {
           {rows.map((r) => (
             <tr key={r.id}>
               <td className="mono small">{r.internal_id}</td>
-              <td>{r.type}</td>
+              <td>{r.type === 'credit_note' ? 'credit note' : r.type}</td>
               <td>{r.type === 'consolidated' ? r.period : `#${r.order_no ?? r.order_id}`}</td>
               <td>
                 <span className={`badge ${STATUS_BADGE[r.status]}`}>{r.status}</span>

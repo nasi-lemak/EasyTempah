@@ -14,13 +14,15 @@ import {
   moveTable,
   sendToKitchen,
   setDiscount,
+  splitOrder,
   updateLine,
   voidOrder,
   type AddLineInput,
   type PayInput,
   type RefundInput,
+  type SplitPick,
 } from '../services/orders';
-import { einvoiceWithPortal } from '../services/einvoice';
+import { createCreditNoteForRefund, einvoiceWithPortal } from '../services/einvoice';
 import { printKitchenTickets } from '../services/printer';
 import { getBusinessSettings, getPaymentsSettings, getTaxSettings } from '../services/settings';
 import type { OrderType } from '../types';
@@ -172,6 +174,18 @@ ordersRouter.patch('/:id', (req: AuthedRequest, res) => {
   res.json({ order: getOrder(orderId) });
 });
 
+/** Split selected items (whole or partial quantities) onto a new sibling bill. */
+ordersRouter.post('/:id/split', (req: AuthedRequest, res) => {
+  const orderId = Number(req.params.id);
+  const lines = (req.body as { lines?: SplitPick[] }).lines;
+  if (!Array.isArray(lines)) throw badRequest('lines[] required');
+  const newId = splitOrder(orderId, lines, req.user!.id);
+  publish('orders');
+  publish('tables');
+  publish('kds');
+  res.status(201).json({ order: getOrder(newId), origin: getOrder(orderId) });
+});
+
 ordersRouter.post('/:id/payments', (req: AuthedRequest, res) => {
   const orderId = Number(req.params.id);
   const b = req.body as PayInput & { channel_key?: string };
@@ -213,7 +227,18 @@ ordersRouter.post('/:id/refunds', (req: AuthedRequest, res) => {
     return;
   }
 
-  addRefund(orderId, { method: b.method, amount_cents: b.amount_cents, reason: b.reason ?? '' }, req.user!.id, approvedBy);
+  const refundId = addRefund(
+    orderId,
+    { method: b.method, amount_cents: b.amount_cents, reason: b.reason ?? '' },
+    req.user!.id,
+    approvedBy,
+  );
+  // LHDN compliance: an e-invoiced sale that is refunded needs a credit note.
+  // Fire-and-forget — a slow/down LHDN must not hold the refund; failures land
+  // as retriable error rows in the e-invoice registry.
+  void createCreditNoteForRefund(refundId, req.user!.id).catch((err) =>
+    console.error('Credit note creation failed:', err instanceof Error ? err.message : err),
+  );
   publish('orders');
   publish('shifts');
   res.status(201).json({ order: getOrder(orderId) });

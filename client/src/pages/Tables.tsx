@@ -268,7 +268,10 @@ function FloorPlan({
               <span className="tname">{t.name}</span>
               {occupied ? (
                 <>
-                  <span className="sub">{t.covers} pax · {age(t.order_opened_at)}</span>
+                  <span className="sub">
+                    {t.covers} pax · {age(t.order_opened_at)}
+                    {(t.open_orders ?? 1) > 1 ? ` · ${t.open_orders} bills` : ''}
+                  </span>
                   <span className="amt">{money(t.total_cents)}</span>
                 </>
               ) : (
@@ -340,6 +343,7 @@ function GridView({
                   <span>
                     <div className="small">
                       #{t.order_no} · {t.covers} pax · {age(t.order_opened_at)}
+                      {(t.open_orders ?? 1) > 1 ? ` · ${t.open_orders} bills` : ''}
                       {(t.ready_lines ?? 0) > 0 ? ' · ✅ ready' : (t.cooking_lines ?? 0) > 0 ? ' · 🍳 cooking' : ''}
                     </div>
                     <div style={{ fontWeight: 700, color: 'var(--warn)' }}>{money(t.total_cents)}</div>

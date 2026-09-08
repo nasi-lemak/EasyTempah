@@ -68,6 +68,7 @@ export interface DiningTable {
   qr_token: string | null;
   order_id: number | null;
   order_no: string | null;
+  open_orders: number | null;
   total_cents: number | null;
   covers: number | null;
   order_opened_at: string | null;
@@ -233,7 +234,8 @@ export interface Einvoice {
   id: number;
   order_id: number | null;
   order_no?: string | null;
-  type: 'invoice' | 'consolidated';
+  type: 'invoice' | 'consolidated' | 'credit_note';
+  refund_id: number | null;
   status: 'pending' | 'submitted' | 'valid' | 'invalid' | 'error';
   buyer_json: string | null;
   internal_id: string;

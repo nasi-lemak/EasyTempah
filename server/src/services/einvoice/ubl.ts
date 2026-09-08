@@ -103,6 +103,10 @@ function buildDocument(cfg: {
   lines: UblLine[];
   totals: DocumentTotals;
   issueDate: Date;
+  /** MyInvois document type: 01 invoice (default), 02 credit note. */
+  typeCode?: string;
+  /** Credit notes must reference the original validated e-invoice. */
+  billingRef?: { internalId: string; uuid: string };
 }): Record<string, unknown> {
   const { settings, totals } = cfg;
   const taxExclusive = totals.lineExtensionCents - totals.discountCents + totals.serviceCents;
@@ -126,8 +130,19 @@ function buildDocument(cfg: {
     ID: [txt(cfg.internalId)],
     IssueDate: [txt(cfg.issueDate.toISOString().slice(0, 10))],
     IssueTime: [txt(cfg.issueDate.toISOString().slice(11, 19) + 'Z')],
-    InvoiceTypeCode: [{ _: '01', listVersionID: '1.0' }],
+    InvoiceTypeCode: [{ _: cfg.typeCode ?? '01', listVersionID: '1.0' }],
     DocumentCurrencyCode: [txt('MYR')],
+    ...(cfg.billingRef
+      ? {
+          BillingReference: [
+            {
+              InvoiceDocumentReference: [
+                { ID: [txt(cfg.billingRef.internalId)], UUID: [txt(cfg.billingRef.uuid)] },
+              ],
+            },
+          ],
+        }
+      : {}),
     AccountingSupplierParty: [
       {
         Party: [
@@ -252,6 +267,56 @@ export function buildOrderInvoice(
       payableCents: order.total_cents,
     },
     issueDate: new Date(),
+  });
+}
+
+/**
+ * Credit note (type 02) against a validated e-invoice, for a refund. The
+ * refund is a gross amount; its tax share is passed in already computed.
+ */
+export function buildCreditNote(cfg: {
+  internalId: string;
+  settings: EinvoiceSettings;
+  supplierName: string;
+  buyer: EinvoiceBuyer;
+  refundGrossCents: number;
+  refundTaxCents: number;
+  reason: string;
+  original: { internalId: string; uuid: string };
+}): Record<string, unknown> {
+  const excl = cfg.refundGrossCents - cfg.refundTaxCents;
+  return buildDocument({
+    internalId: cfg.internalId,
+    settings: cfg.settings,
+    supplierName: cfg.supplierName,
+    buyer: {
+      tin: cfg.buyer.tin,
+      idType: cfg.buyer.idType,
+      idValue: cfg.buyer.idValue,
+      name: cfg.buyer.name,
+      address: cfg.buyer.address,
+    },
+    lines: [
+      {
+        id: '1',
+        description: `Refund: ${cfg.reason}`,
+        quantity: 1,
+        amountCents: excl,
+        taxCents: cfg.refundTaxCents,
+        classificationCode: cfg.settings.classificationCode,
+      },
+    ],
+    totals: {
+      lineExtensionCents: excl,
+      discountCents: 0,
+      serviceCents: 0,
+      taxCents: cfg.refundTaxCents,
+      roundingCents: 0,
+      payableCents: cfg.refundGrossCents,
+    },
+    issueDate: new Date(),
+    typeCode: '02',
+    billingRef: cfg.original,
   });
 }
 

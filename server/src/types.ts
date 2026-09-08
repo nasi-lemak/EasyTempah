@@ -260,7 +260,8 @@ export interface EinvoiceBuyer {
 export interface EinvoiceRow {
   id: number;
   order_id: number | null;
-  type: 'invoice' | 'consolidated';
+  type: 'invoice' | 'consolidated' | 'credit_note';
+  refund_id: number | null;
   status: 'pending' | 'submitted' | 'valid' | 'invalid' | 'error';
   buyer_json: string | null;
   document_json: string;
