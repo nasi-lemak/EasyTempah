@@ -181,6 +181,23 @@ signed with the shared secret.
   their orders for retry. Valid documents expose the MyInvois portal link,
   which the receipt renders as a QR alongside the UUID.
 
+## Delivery platform orders (GrabFood / foodpanda / ShopeeFood)
+
+Orders re-keyed from a platform's merchant tablet are first-class: the delivery
+start flow tags the order with a configured platform (`orders.platform`) and
+the platform's own order number (`orders.platform_ref`) for reconciliation.
+Settlement is one tap at menu value under the platform's name (payment kind
+`other`, channel = platform label, reference = platform order no.), so kitchen
+tickets, stock deduction and reports all reconcile while drawer math is
+untouched. Two compliance rules are enforced server-side: platform orders
+cannot be individually e-invoiced, and they are excluded from the monthly
+consolidated e-invoice — under LHDN's e-commerce rules the platform issues
+those e-invoices, and including them would report the sale twice. Reports show
+a per-platform breakdown: orders, gross, and estimated commission/net payout
+from the configurable commission rate (an estimate to reconcile against the
+platform's settlement report). Automatic order ingestion from platform APIs is
+a future adapter on the same webhook pattern as the payment gateway.
+
 ## QR table ordering
 
 Every dining table carries a random `qr_token`; a printed QR points guests at

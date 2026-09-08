@@ -48,8 +48,13 @@ export default function PayDialog({
   const [intentQr, setIntentQr] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const platforms = useStore((s) => s.platforms);
+  const platformCfg = order.platform
+    ? platforms?.platforms.find((p) => p.key === order.platform)
+    : undefined;
+
   const balance = order.total_cents - order.paid_cents;
-  const gatewayActive = !!gateway?.enabled && kind !== 'cash';
+  const gatewayActive = !!gateway?.enabled && kind !== 'cash' && !order.platform;
 
   // Render the intent's dynamic QR (falls back to the static counter payload).
   useEffect(() => {
@@ -227,6 +232,44 @@ export default function PayDialog({
       : null;
 
   const byKind = (k: string) => channels.filter((c) => c.kind === k);
+
+  const settlePlatform = async () => {
+    if (busy || !platformCfg) return;
+    setBusy(true);
+    setError('');
+    try {
+      const r = await api.post<{ paid: boolean; order: Order }>(`/api/orders/${order.id}/payments`, {
+        method: 'other',
+        channel: platformCfg.label,
+        amount_cents: balance,
+        reference: order.platform_ref || undefined,
+      });
+      if (r.paid) onPaid(r.order);
+      else onUpdated(r.order);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Platform delivery orders: the platform already collected from the customer.
+  if (platformCfg) {
+    return (
+      <Modal title={`Payment — #${order.order_no}`} onClose={onClose}>
+        <p className="muted small">
+          {platformCfg.label} order{order.platform_ref ? ` #${order.platform_ref}` : ''} — the
+          platform collects payment from the customer and pays out net of its ~
+          {platformCfg.commissionPct}% commission. Settle the order here at menu value so the
+          kitchen, stock and reports reconcile.
+        </p>
+        <button className="primary" style={{ width: '100%' }} onClick={settlePlatform} disabled={busy}>
+          Settle · Paid via {platformCfg.label} · {money(balance)}
+        </button>
+        {error && <div className="error-text mt">{error}</div>}
+      </Modal>
+    );
+  }
 
   return (
     <Modal title={`Payment — #${order.order_no}`} onClose={onClose}>

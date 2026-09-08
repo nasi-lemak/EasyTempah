@@ -5,6 +5,7 @@ import type {
   EinvoiceSettings,
   GatewaySettings,
   PaymentsSettings,
+  PlatformsSettings,
   PrintersSettings,
   TaxSettings,
 } from './types';
@@ -16,6 +17,7 @@ export interface SettingsBundle {
   payments?: PaymentsSettings;
   einvoice?: EinvoiceSettings;
   gateway?: GatewaySettings;
+  platforms?: PlatformsSettings;
 }
 
 interface AppState {
@@ -27,6 +29,7 @@ interface AppState {
   payments: PaymentsSettings | null;
   einvoice: EinvoiceSettings | null;
   gateway: GatewaySettings | null;
+  platforms: PlatformsSettings | null;
   setAuth: (token: string, user: AuthUser) => void;
   clearAuth: () => void;
   setSettings: (bundle: SettingsBundle) => void;
@@ -52,6 +55,7 @@ export const useStore = create<AppState>((set) => ({
   payments: null,
   einvoice: null,
   gateway: null,
+  platforms: null,
   setAuth: (token, user) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ token, user }));
     set({ token, user });
@@ -68,6 +72,7 @@ export const useStore = create<AppState>((set) => ({
       ...(bundle.payments ? { payments: bundle.payments } : {}),
       ...(bundle.einvoice ? { einvoice: bundle.einvoice } : {}),
       ...(bundle.gateway ? { gateway: bundle.gateway } : {}),
+      ...(bundle.platforms ? { platforms: bundle.platforms } : {}),
     }),
 }));
 

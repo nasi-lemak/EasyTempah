@@ -9,6 +9,11 @@ import { hasRole, useMoney, useStore } from '../store';
 import type { Item, MenuData, ModifierSnapshot, Order } from '../types';
 import { useEvents } from '../useEvents';
 
+function usePlatformLabel(): (key: string) => string {
+  const platforms = useStore((s) => s.platforms);
+  return (key) => platforms?.platforms.find((p) => p.key === key)?.label ?? key;
+}
+
 export default function Pos() {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -17,6 +22,7 @@ export default function Pos() {
   const business = useStore((s) => s.business);
   const tax = useStore((s) => s.tax);
   const printers = useStore((s) => s.printers);
+  const platformLabel = usePlatformLabel();
 
   const [menu, setMenu] = useState<MenuData | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
@@ -25,6 +31,7 @@ export default function Pos() {
   const [showPay, setShowPay] = useState(false);
   const [showDiscount, setShowDiscount] = useState(false);
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
+  const [showDelivery, setShowDelivery] = useState(false);
   const [error, setError] = useState('');
 
   const loadMenu = useCallback(() => {
@@ -63,9 +70,13 @@ export default function Pos() {
     }
   };
 
-  const startOrder = (type: 'takeaway' | 'delivery') =>
+  const startOrder = (type: 'takeaway' | 'delivery', platform?: string, platformRef?: string) =>
     run(async () => {
-      const r = await api.post<{ order: Order }>('/api/orders', { type });
+      const r = await api.post<{ order: Order }>('/api/orders', {
+        type,
+        platform: platform || undefined,
+        platform_ref: platformRef || undefined,
+      });
       navigate(`/pos/${r.order.id}`);
     });
 
@@ -156,11 +167,20 @@ export default function Pos() {
           <button style={{ minHeight: 90, minWidth: 180, fontSize: '1.1rem' }} onClick={() => startOrder('takeaway')}>
             Takeaway
           </button>
-          <button style={{ minHeight: 90, minWidth: 180, fontSize: '1.1rem' }} onClick={() => startOrder('delivery')}>
+          <button style={{ minHeight: 90, minWidth: 180, fontSize: '1.1rem' }} onClick={() => setShowDelivery(true)}>
             Delivery
           </button>
         </div>
         {error && <div className="error-text mt">{error}</div>}
+        {showDelivery && (
+          <DeliveryDialog
+            onStart={(platform, ref) => {
+              setShowDelivery(false);
+              startOrder('delivery', platform, ref);
+            }}
+            onClose={() => setShowDelivery(false)}
+          />
+        )}
         <RecentOpenOrders />
       </div>
     );
@@ -208,7 +228,11 @@ export default function Pos() {
             <div className="row">
               <strong className="grow">
                 #{order.order_no}
-                {order.table_name ? ` · Table ${order.table_name}` : ` · ${order.type.replace('_', ' ')}`}
+                {order.table_name
+                  ? ` · Table ${order.table_name}`
+                  : order.platform
+                    ? ` · ${platformLabel(order.platform)}${order.platform_ref ? ` #${order.platform_ref}` : ''}`
+                    : ` · ${order.type.replace('_', ' ')}`}
               </strong>
               <span className={`badge ${order.status}`}>{order.status}</span>
             </div>
@@ -339,6 +363,48 @@ export default function Pos() {
         </Modal>
       )}
     </div>
+  );
+}
+
+function DeliveryDialog({
+  onStart,
+  onClose,
+}: {
+  onStart: (platform: string | undefined, ref: string | undefined) => void;
+  onClose: () => void;
+}) {
+  const platforms = useStore((s) => s.platforms);
+  const enabled = (platforms?.platforms ?? []).filter((p) => p.enabled);
+  const [platform, setPlatform] = useState<string | undefined>(undefined);
+  const [ref, setRef] = useState('');
+
+  return (
+    <Modal title="Delivery order" onClose={onClose}>
+      <label>Source</label>
+      <div className="row wrap mb">
+        <button className={platform === undefined ? 'primary' : ''} onClick={() => setPlatform(undefined)}>
+          In-house delivery
+        </button>
+        {enabled.map((p) => (
+          <button key={p.key} className={platform === p.key ? 'primary' : ''} onClick={() => setPlatform(p.key)}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+      {platform && (
+        <div className="mb">
+          <label>Platform order no. (from the merchant tablet)</label>
+          <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="e.g. GF-1234" style={{ width: '100%' }} />
+          <div className="muted small mt">
+            The platform collects payment and issues the customer's e-invoice — this order is
+            excluded from your consolidated e-invoice automatically.
+          </div>
+        </div>
+      )}
+      <button className="primary" onClick={() => onStart(platform, ref.trim() || undefined)}>
+        Start order
+      </button>
+    </Modal>
   );
 }
 

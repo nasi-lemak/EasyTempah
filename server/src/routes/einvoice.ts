@@ -64,7 +64,7 @@ einvoiceRouter.get('/consolidate/preview', requireRole('manager'), (req, res) =>
     .prepare(
       `SELECT COUNT(*) AS orders, COALESCE(SUM(total_cents), 0) AS total_cents
        FROM orders
-       WHERE status = 'paid' AND einvoice_id IS NULL
+       WHERE status = 'paid' AND einvoice_id IS NULL AND platform IS NULL
          AND strftime('%Y-%m', closed_at, 'localtime') = ?`,
     )
     .get(period) as { orders: number; total_cents: number };

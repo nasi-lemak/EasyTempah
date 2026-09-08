@@ -9,7 +9,7 @@ kitchen displays and the back office, all over the local network.
 
 **Front of house**
 - Dine-in with a live spatial floor plan (tables positioned per zone, square/round shapes, occupancy, running totals, cooking / food-ready indicators) plus a grid fallback view; managers arrange the floor with a drag-and-drop layout editor
-- Takeaway and delivery orders
+- Takeaway and delivery orders, including delivery-platform orders (GrabFood / foodpanda / ShopeeFood): re-keyed from the merchant tablet with the platform's order number, settled one-tap at menu value under the platform's name, excluded from the merchant's consolidated e-invoice (the platform issues those), and reported per platform with gross vs. estimated net payout from configurable commission rates
 - Menu with categories and item modifiers (required/optional groups, priced add-ons, kitchen notes)
 - Order-level discounts (percent/fixed, manager-gated above 20%), order notes, table transfer
 - Payments: cash (tendered/change), card, and named e-wallet channels (Touch 'n Go, GrabPay, Boost, ShopeePay, DuitNow QR — configurable in Settings) with an on-screen scan-to-pay QR; split bills by amount; Malaysian 5-sen cash rounding (configurable). Shift and reports break sales down per channel while drawer math stays keyed on cash

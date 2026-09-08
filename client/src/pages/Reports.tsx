@@ -15,6 +15,15 @@ interface Summary {
   refund_count: number;
   net_cents: number;
   by_type: { type: string; orders: number; total_cents: number }[];
+  by_platform: {
+    platform: string;
+    label: string;
+    orders: number;
+    gross_cents: number;
+    commission_pct: number;
+    est_commission_cents: number;
+    est_net_cents: number;
+  }[];
 }
 
 interface ItemRow { name: string; qty: number; total_cents: number }
@@ -128,6 +137,37 @@ export default function Reports() {
           )}
         </div>
       </div>
+
+      {summary && summary.by_platform.length > 0 && (
+        <div className="panel mt">
+          <h2>Delivery platforms</h2>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Platform</th><th className="num">Orders</th><th className="num">Gross</th>
+                <th className="num">Est. commission</th><th className="num">Est. net payout</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.by_platform.map((p) => (
+                <tr key={p.platform}>
+                  <td>{p.label}</td>
+                  <td className="num">{p.orders}</td>
+                  <td className="num">{money(p.gross_cents)}</td>
+                  <td className="num" style={{ color: 'var(--danger)' }}>
+                    -{money(p.est_commission_cents)} <span className="muted small">({p.commission_pct}%)</span>
+                  </td>
+                  <td className="num" style={{ fontWeight: 700 }}>{money(p.est_net_cents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="muted small">
+            Net payout is an estimate from the configured commission rate — reconcile against the
+            platform's actual settlement report.
+          </p>
+        </div>
+      )}
 
       <div className="panel mt">
         <h2>Top items</h2>

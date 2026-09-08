@@ -6,6 +6,7 @@ import type {
   EinvoiceSettings,
   GatewaySettings,
   PaymentsSettings,
+  PlatformsSettings,
   PrintersSettings,
   TaxSettings,
 } from '../types';
@@ -17,6 +18,7 @@ type SettingsPayload = {
   payments: PaymentsSettings;
   einvoice: EinvoiceSettings;
   gateway: GatewaySettings;
+  platforms: PlatformsSettings;
 };
 
 export default function SettingsPage() {
@@ -29,6 +31,7 @@ export default function SettingsPage() {
   const [einvoiceSecret, setEinvoiceSecret] = useState('');
   const [gateway, setGateway] = useState<GatewaySettings | null>(null);
   const [gatewaySecret, setGatewaySecret] = useState('');
+  const [platforms, setPlatforms] = useState<PlatformsSettings | null>(null);
   const [saved, setSaved] = useState(false);
   const [testMsg, setTestMsg] = useState('');
   const [error, setError] = useState('');
@@ -43,11 +46,12 @@ export default function SettingsPage() {
         setPayments(r.payments);
         setEinvoice(r.einvoice);
         setGateway(r.gateway);
+        setPlatforms(r.platforms);
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, []);
 
-  if (!business || !tax || !printers || !payments || !einvoice || !gateway) {
+  if (!business || !tax || !printers || !payments || !einvoice || !gateway || !platforms) {
     return <div className="muted">Loading…</div>;
   }
 
@@ -62,6 +66,7 @@ export default function SettingsPage() {
         payments,
         einvoice: { ...einvoice, ...(einvoiceSecret.trim() ? { clientSecret: einvoiceSecret.trim() } : {}) },
         gateway: { ...gateway, ...(gatewaySecret.trim() ? { webhookSecret: gatewaySecret.trim() } : {}) },
+        platforms,
       });
       setBusiness(r.business);
       setTax(r.tax);
@@ -69,6 +74,7 @@ export default function SettingsPage() {
       setPayments(r.payments);
       setEinvoice(r.einvoice);
       setGateway(r.gateway);
+      setPlatforms(r.platforms);
       setEinvoiceSecret('');
       setGatewaySecret('');
       setSettings(r);
@@ -212,6 +218,42 @@ export default function SettingsPage() {
           Powers both the printable counter standee and the on-screen QR shown when a cashier
           selects a wallet. Save before printing.
         </div>
+      </div>
+
+      <div className="panel mb">
+        <h2>Delivery platforms</h2>
+        <p className="muted small">
+          For orders re-keyed from GrabFood/foodpanda/ShopeeFood merchant tablets. Platform orders
+          settle at menu value under the platform's name, are excluded from your consolidated
+          e-invoice (the platform issues those), and report gross vs. estimated net payout using
+          the commission rate below.
+        </p>
+        {platforms.platforms.map((p, i) => (
+          <div className="row wrap mb" key={p.key}>
+            <button
+              className={p.enabled ? 'primary' : ''}
+              style={{ minWidth: 130 }}
+              onClick={() => {
+                const list = platforms.platforms.slice();
+                list[i] = { ...p, enabled: !p.enabled };
+                setPlatforms({ platforms: list });
+              }}
+            >
+              {p.label} {p.enabled ? 'ON' : 'off'}
+            </button>
+            <label style={{ margin: 0 }}>Commission %</label>
+            <input
+              type="number"
+              value={p.commissionPct}
+              style={{ width: 80 }}
+              onChange={(e) => {
+                const list = platforms.platforms.slice();
+                list[i] = { ...p, commissionPct: Number(e.target.value) };
+                setPlatforms({ platforms: list });
+              }}
+            />
+          </div>
+        ))}
       </div>
 
       <div className="panel mb">

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../db/connection';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { badRequest } from '../middleware/errors';
+import { getPlatformsSettings } from '../services/settings';
 
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth, requireRole('manager'));
@@ -53,6 +54,27 @@ reportsRouter.get('/summary', (req, res) => {
     )
     .get(from, to) as { total: number; n: number };
 
+  const platformCfg = getPlatformsSettings().platforms;
+  const byPlatform = (
+    db
+      .prepare(
+        `SELECT o.platform, COUNT(*) AS orders, COALESCE(SUM(o.total_cents), 0) AS gross_cents
+         FROM orders o WHERE ${PAID_IN_RANGE} AND o.platform IS NOT NULL
+         GROUP BY o.platform ORDER BY gross_cents DESC`,
+      )
+      .all(from, to) as { platform: string; orders: number; gross_cents: number }[]
+  ).map((row) => {
+    const cfg = platformCfg.find((p) => p.key === row.platform);
+    const commission = Math.round((row.gross_cents * (cfg?.commissionPct ?? 0)) / 100);
+    return {
+      ...row,
+      label: cfg?.label ?? row.platform,
+      commission_pct: cfg?.commissionPct ?? 0,
+      est_commission_cents: commission,
+      est_net_cents: row.gross_cents - commission,
+    };
+  });
+
   const avg = totals.orders > 0 ? Math.round(totals.gross_cents / totals.orders) : 0;
   res.json({
     from,
@@ -64,6 +86,7 @@ reportsRouter.get('/summary', (req, res) => {
     refund_count: refunds.n,
     net_cents: totals.gross_cents - refunds.total,
     by_type: byType,
+    by_platform: byPlatform,
   });
 });
 

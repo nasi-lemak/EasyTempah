@@ -33,6 +33,9 @@ export default function Orders() {
   const [einvOrder, setEinvOrder] = useState<Order | null>(null);
   const [error, setError] = useState('');
   const einvoiceCfg = useStore((s) => s.einvoice);
+  const platformsCfg = useStore((s) => s.platforms);
+  const platformLabel = (key: string) =>
+    platformsCfg?.platforms.find((p) => p.key === key)?.label ?? key;
 
   const load = useCallback(() => {
     const params = new URLSearchParams();
@@ -98,7 +101,16 @@ export default function Orders() {
             <tr key={o.id}>
               <td>{o.order_no}</td>
               <td className="small muted">{formatDateTime(o.opened_at)}</td>
-              <td>{o.type.replace('_', ' ')}</td>
+              <td>
+                {o.platform ? (
+                  <>
+                    {platformLabel(o.platform)}
+                    {o.platform_ref && <div className="small muted">#{o.platform_ref}</div>}
+                  </>
+                ) : (
+                  o.type.replace('_', ' ')
+                )}
+              </td>
               <td>{o.table_name ?? '—'}</td>
               <td>
                 <span className={`badge ${o.status}`}>{o.status}</span>
@@ -115,7 +127,7 @@ export default function Orders() {
                 {o.status === 'paid' && o.refunded_cents < o.paid_cents && (
                   <button className="danger" onClick={() => setRefundOrder(o)}>Refund</button>
                 )}{' '}
-                {o.status === 'paid' && einvoiceCfg?.enabled && (
+                {o.status === 'paid' && einvoiceCfg?.enabled && !o.platform && (
                   <button onClick={() => setEinvOrder(o)}>e-Invoice</button>
                 )}{' '}
                 {o.status === 'open' && hasRole(user, 'manager') && (

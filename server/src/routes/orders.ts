@@ -60,10 +60,24 @@ ordersRouter.get('/', (req, res) => {
 });
 
 ordersRouter.post('/', (req: AuthedRequest, res) => {
-  const b = req.body as { type?: OrderType; table_id?: number; covers?: number; notes?: string };
+  const b = req.body as {
+    type?: OrderType;
+    table_id?: number;
+    covers?: number;
+    notes?: string;
+    platform?: string;
+    platform_ref?: string;
+  };
   if (!b.type || !ORDER_TYPES.includes(b.type)) throw badRequest('Invalid order type');
   const id = createOrder(
-    { type: b.type, table_id: b.table_id ?? null, covers: b.covers, notes: b.notes ?? null },
+    {
+      type: b.type,
+      table_id: b.table_id ?? null,
+      covers: b.covers,
+      notes: b.notes ?? null,
+      platform: b.platform ?? null,
+      platform_ref: b.platform_ref ?? null,
+    },
     req.user!.id,
   );
   publish('orders');

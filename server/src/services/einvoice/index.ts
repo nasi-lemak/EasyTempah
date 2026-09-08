@@ -120,6 +120,9 @@ export async function createOrderEinvoice(
   const settings = requireConfigured();
   const order = getOrder(orderId);
   if (order.status !== 'paid') throw conflict('Only paid orders can be e-invoiced');
+  if (order.platform) {
+    throw conflict('Platform delivery orders are e-invoiced by the platform (e.g. GrabFood), not the merchant');
+  }
   const existing = db
     .prepare("SELECT * FROM einvoices WHERE order_id = ? AND status IN ('pending','submitted','valid')")
     .get(orderId) as EinvoiceRow | undefined;
@@ -155,10 +158,12 @@ export async function createConsolidatedEinvoice(period: string, userId: number)
     .get(period) as EinvoiceRow | undefined;
   if (existing) throw conflict(`A consolidated e-invoice for ${period} already exists (status: ${existing.status})`);
 
+  // Platform orders (GrabFood etc.) are excluded: the platform issues those
+  // e-invoices — consolidating them here would report the sale to LHDN twice.
   const orders = db
     .prepare(
       `SELECT * FROM orders
-       WHERE status = 'paid' AND einvoice_id IS NULL
+       WHERE status = 'paid' AND einvoice_id IS NULL AND platform IS NULL
          AND strftime('%Y-%m', closed_at, 'localtime') = ?
        ORDER BY id`,
     )

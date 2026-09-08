@@ -269,6 +269,12 @@ const MIGRATIONS: string[] = [
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   `,
+  // v7 — delivery platform orders (GrabFood etc.): identity + platform order ref
+  `
+  ALTER TABLE orders ADD COLUMN platform TEXT;
+  ALTER TABLE orders ADD COLUMN platform_ref TEXT;
+  CREATE INDEX idx_orders_platform ON orders(platform);
+  `,
 ];
 
 export function applySchema(db: Database): void {

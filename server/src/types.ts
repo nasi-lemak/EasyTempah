@@ -94,6 +94,8 @@ export interface Order {
   closed_at: string | null;
   void_reason: string | null;
   einvoice_id: number | null;
+  platform: string | null; // delivery platform key, e.g. "grabfood"; null = own order
+  platform_ref: string | null; // the platform's order number for reconciliation
 }
 
 export interface OrderItemModifierSnapshot {
@@ -180,6 +182,17 @@ export interface PaymentsSettings {
   channels: PaymentChannel[];
   /** Static DuitNow/wallet QR payload shown to customers when an e-wallet channel is chosen. */
   ewalletQrPayload: string;
+}
+
+export interface DeliveryPlatform {
+  key: string;
+  label: string;
+  commissionPct: number; // platform commission for estimated-net reporting
+  enabled: boolean;
+}
+
+export interface PlatformsSettings {
+  platforms: DeliveryPlatform[];
 }
 
 export interface GatewaySettings {

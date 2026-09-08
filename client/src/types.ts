@@ -145,6 +145,8 @@ export interface Order {
   opened_at: string;
   closed_at: string | null;
   void_reason: string | null;
+  platform: string | null;
+  platform_ref: string | null;
   items: OrderItem[];
   payments: Payment[];
   refunds: Refund[];
@@ -170,6 +172,17 @@ export interface PaymentChannel {
 export interface PaymentsSettings {
   channels: PaymentChannel[];
   ewalletQrPayload: string;
+}
+
+export interface DeliveryPlatform {
+  key: string;
+  label: string;
+  commissionPct: number;
+  enabled: boolean;
+}
+
+export interface PlatformsSettings {
+  platforms: DeliveryPlatform[];
 }
 
 export interface GatewaySettings {

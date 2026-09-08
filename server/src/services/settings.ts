@@ -4,6 +4,7 @@ import type {
   EinvoiceSettings,
   GatewaySettings,
   PaymentsSettings,
+  PlatformsSettings,
   PrintersSettings,
   TaxSettings,
 } from '../types';
@@ -102,6 +103,20 @@ export const DEFAULT_EINVOICE: EinvoiceSettings = {
 
 export function getEinvoiceSettings(): EinvoiceSettings {
   return getSetting('einvoice', DEFAULT_EINVOICE);
+}
+
+export const DEFAULT_PLATFORMS: PlatformsSettings = {
+  platforms: [
+    { key: 'grabfood', label: 'GrabFood', commissionPct: 30, enabled: true },
+    { key: 'foodpanda', label: 'foodpanda', commissionPct: 30, enabled: true },
+    { key: 'shopeefood', label: 'ShopeeFood', commissionPct: 25, enabled: false },
+  ],
+};
+
+export function getPlatformsSettings(): PlatformsSettings {
+  const stored = getSetting('platforms', DEFAULT_PLATFORMS);
+  if (!Array.isArray(stored.platforms)) return DEFAULT_PLATFORMS;
+  return stored;
 }
 
 export const DEFAULT_GATEWAY: GatewaySettings = {

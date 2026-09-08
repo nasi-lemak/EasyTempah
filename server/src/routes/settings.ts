@@ -9,6 +9,7 @@ import {
   getEinvoiceSettings,
   getGatewaySettings,
   getPaymentsSettings,
+  getPlatformsSettings,
   getPrintersSettings,
   getTaxSettings,
   setSetting,
@@ -18,6 +19,7 @@ import type {
   EinvoiceSettings,
   GatewaySettings,
   PaymentsSettings,
+  PlatformsSettings,
   PrintersSettings,
   TaxSettings,
 } from '../types';
@@ -41,6 +43,7 @@ function fullPayload() {
     payments: getPaymentsSettings(),
     einvoice: maskedEinvoice(),
     gateway: maskedGateway(),
+    platforms: getPlatformsSettings(),
   };
 }
 
@@ -53,13 +56,14 @@ settingsRouter.get('/', (_req, res) => {
 });
 
 settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
-  const { business, tax, printers, payments, einvoice, gateway } = req.body as {
+  const { business, tax, printers, payments, einvoice, gateway, platforms } = req.body as {
     business?: Partial<BusinessSettings>;
     tax?: Partial<TaxSettings>;
     printers?: Partial<PrintersSettings>;
     payments?: Partial<PaymentsSettings>;
     einvoice?: Partial<EinvoiceSettings>;
     gateway?: Partial<GatewaySettings>;
+    platforms?: Partial<PlatformsSettings>;
   };
   if (business) {
     setSetting('business', { ...DEFAULT_BUSINESS, ...getBusinessSettings(), ...business });
@@ -132,6 +136,23 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
     if (!['mock', 'generic'].includes(merged.provider)) throw badRequest('Gateway provider must be mock or generic');
     if (merged.enabled && !merged.webhookSecret) throw badRequest('Webhook secret required to enable the gateway');
     setSetting('gateway', merged);
+  }
+  if (platforms) {
+    const list = Array.isArray(platforms.platforms) ? platforms.platforms : getPlatformsSettings().platforms;
+    for (const p of list) {
+      if (!p.key?.trim() || !p.label?.trim()) throw badRequest('Platforms need a key and label');
+      if (typeof p.commissionPct !== 'number' || p.commissionPct < 0 || p.commissionPct > 100) {
+        throw badRequest('Platform commission must be 0-100%');
+      }
+    }
+    setSetting('platforms', {
+      platforms: list.map((p) => ({
+        key: p.key.trim(),
+        label: p.label.trim(),
+        commissionPct: p.commissionPct,
+        enabled: !!p.enabled,
+      })),
+    });
   }
   audit(req.user!.id, 'settings.update');
   res.json(fullPayload());

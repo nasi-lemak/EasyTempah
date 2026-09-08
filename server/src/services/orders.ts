@@ -14,7 +14,7 @@ import type {
 } from '../types';
 import { audit } from './audit';
 import { cashRoundingAdjustment, computeTotals } from './orderMath';
-import { getTaxSettings } from './settings';
+import { getPlatformsSettings, getTaxSettings } from './settings';
 
 export interface OrderWithLines extends Order {
   items: OrderItem[];
@@ -102,7 +102,17 @@ function currentShiftId(): number | null {
 }
 
 export const createOrder = db.transaction(
-  (input: { type: OrderType; table_id?: number | null; covers?: number; notes?: string | null }, userId: number): number => {
+  (
+    input: {
+      type: OrderType;
+      table_id?: number | null;
+      covers?: number;
+      notes?: string | null;
+      platform?: string | null;
+      platform_ref?: string | null;
+    },
+    userId: number,
+  ): number => {
     if (input.type === 'dine_in') {
       if (!input.table_id) throw badRequest('Dine-in orders require a table');
       const open = db
@@ -110,10 +120,19 @@ export const createOrder = db.transaction(
         .get(input.table_id) as { id: number } | undefined;
       if (open) throw conflict('Table already has an open order');
     }
+    let platform: string | null = null;
+    if (input.platform) {
+      if (input.type !== 'delivery') throw badRequest('Only delivery orders belong to a platform');
+      const known = getPlatformsSettings().platforms.find(
+        (p) => p.key === input.platform && p.enabled,
+      );
+      if (!known) throw badRequest('Unknown or disabled delivery platform');
+      platform = known.key;
+    }
     const info = db
       .prepare(
-        `INSERT INTO orders (order_no, type, table_id, covers, notes, shift_id, opened_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO orders (order_no, type, table_id, covers, notes, shift_id, opened_by, platform, platform_ref)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         nextOrderNo(),
@@ -123,6 +142,8 @@ export const createOrder = db.transaction(
         input.notes ?? null,
         currentShiftId(),
         userId,
+        platform,
+        platform ? (input.platform_ref?.trim() || null) : null,
       );
     return Number(info.lastInsertRowid);
   },
