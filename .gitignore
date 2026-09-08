@@ -2,8 +2,5 @@ node_modules/
 dist/
 *.log
 .env
-server/data/*.db
-server/data/*.db-journal
-server/data/*.db-wal
-server/data/*.db-shm
+server/data/
 .DS_Store
