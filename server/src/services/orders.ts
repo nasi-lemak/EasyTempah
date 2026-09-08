@@ -391,6 +391,7 @@ export const setDiscount = db.transaction(
 
 export interface PayInput {
   method: PaymentMethod;
+  channel?: string | null; // specific channel label, e.g. "GrabPay"; kind stays in `method`
   amount_cents: number;
   tendered_cents?: number;
   reference?: string | null;
@@ -434,10 +435,10 @@ export const addPayment = db.transaction(
     }
 
     db.prepare(
-      `INSERT INTO payments (order_id, method, amount_cents, tendered_cents, change_cents, reference, user_id, shift_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(orderId, input.method, amount, tendered, input.method === 'cash' ? change : null,
-      input.reference ?? null, userId, currentShiftId());
+      `INSERT INTO payments (order_id, method, channel, amount_cents, tendered_cents, change_cents, reference, user_id, shift_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(orderId, input.method, input.channel ?? null, amount, tendered,
+      input.method === 'cash' ? change : null, input.reference ?? null, userId, currentShiftId());
 
     db.prepare('UPDATE orders SET paid_cents = paid_cents + ? WHERE id = ?').run(amount, orderId);
 

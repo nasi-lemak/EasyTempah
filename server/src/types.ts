@@ -93,6 +93,7 @@ export interface Order {
   opened_at: string;
   closed_at: string | null;
   void_reason: string | null;
+  einvoice_id: number | null;
 }
 
 export interface OrderItemModifierSnapshot {
@@ -165,6 +166,72 @@ export interface TaxSettings {
   serviceRate: number; // percent, e.g. 10
   serviceLabel: string;
   cashRoundingCents: number; // 5 = round cash totals to nearest 5 cents; 0 = off
+}
+
+export interface PaymentChannel {
+  key: string;
+  label: string;
+  kind: PaymentMethod; // drives drawer math & X-report grouping
+  enabled: boolean;
+}
+
+export interface PaymentsSettings {
+  channels: PaymentChannel[];
+  /** Static DuitNow/wallet QR payload shown to customers when an e-wallet channel is chosen. */
+  ewalletQrPayload: string;
+}
+
+export type EinvoiceIdType = 'BRN' | 'NRIC' | 'PASSPORT' | 'ARMY';
+
+export interface EinvoiceSettings {
+  enabled: boolean;
+  /** mock = built-in simulator (no LHDN calls); sandbox = MyInvois pre-prod; production = live. */
+  environment: 'mock' | 'sandbox' | 'production';
+  clientId: string;
+  clientSecret: string;
+  supplierTin: string;
+  supplierIdType: EinvoiceIdType;
+  supplierIdValue: string; // BRN / NRIC number
+  supplierSstNo: string;
+  msicCode: string; // e.g. 56101 — restaurants and restaurant chains
+  msicDescription: string;
+  classificationCode: string; // item classification, 004 = consolidated e-invoice
+  addressLine: string;
+  city: string;
+  postcode: string;
+  /** MyInvois numeric state code, e.g. 14 = WP Kuala Lumpur. */
+  stateCode: string;
+  taxTypeCode: string; // 01 = sales tax, 02 = service tax
+}
+
+export interface EinvoiceBuyer {
+  tin: string;
+  idType: EinvoiceIdType;
+  idValue: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  sstNo?: string;
+}
+
+export interface EinvoiceRow {
+  id: number;
+  order_id: number | null;
+  type: 'invoice' | 'consolidated';
+  status: 'pending' | 'submitted' | 'valid' | 'invalid' | 'error';
+  buyer_json: string | null;
+  document_json: string;
+  internal_id: string;
+  uuid: string | null;
+  long_id: string | null;
+  submission_uid: string | null;
+  error: string | null;
+  period: string | null;
+  total_cents: number;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PrinterTarget {

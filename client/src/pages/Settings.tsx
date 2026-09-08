@@ -1,15 +1,30 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import type { BusinessSettings, PrintersSettings, TaxSettings } from '../types';
+import type {
+  BusinessSettings,
+  EinvoiceSettings,
+  PaymentsSettings,
+  PrintersSettings,
+  TaxSettings,
+} from '../types';
 
-type SettingsPayload = { business: BusinessSettings; tax: TaxSettings; printers: PrintersSettings };
+type SettingsPayload = {
+  business: BusinessSettings;
+  tax: TaxSettings;
+  printers: PrintersSettings;
+  payments: PaymentsSettings;
+  einvoice: EinvoiceSettings;
+};
 
 export default function SettingsPage() {
   const setSettings = useStore((s) => s.setSettings);
   const [business, setBusiness] = useState<BusinessSettings | null>(null);
   const [tax, setTax] = useState<TaxSettings | null>(null);
   const [printers, setPrinters] = useState<PrintersSettings | null>(null);
+  const [payments, setPayments] = useState<PaymentsSettings | null>(null);
+  const [einvoice, setEinvoice] = useState<EinvoiceSettings | null>(null);
+  const [einvoiceSecret, setEinvoiceSecret] = useState('');
   const [saved, setSaved] = useState(false);
   const [testMsg, setTestMsg] = useState('');
   const [error, setError] = useState('');
@@ -21,21 +36,32 @@ export default function SettingsPage() {
         setBusiness(r.business);
         setTax(r.tax);
         setPrinters(r.printers);
+        setPayments(r.payments);
+        setEinvoice(r.einvoice);
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, []);
 
-  if (!business || !tax || !printers) return <div className="muted">Loading…</div>;
+  if (!business || !tax || !printers || !payments || !einvoice) return <div className="muted">Loading…</div>;
 
   const save = async () => {
     setError('');
     setSaved(false);
     try {
-      const r = await api.put<SettingsPayload>('/api/settings', { business, tax, printers });
+      const r = await api.put<SettingsPayload>('/api/settings', {
+        business,
+        tax,
+        printers,
+        payments,
+        einvoice: { ...einvoice, ...(einvoiceSecret.trim() ? { clientSecret: einvoiceSecret.trim() } : {}) },
+      });
       setBusiness(r.business);
       setTax(r.tax);
       setPrinters(r.printers);
-      setSettings(r.business, r.tax, r.printers);
+      setPayments(r.payments);
+      setEinvoice(r.einvoice);
+      setEinvoiceSecret('');
+      setSettings(r);
       setSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save');
@@ -137,6 +163,95 @@ export default function SettingsPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="panel mb">
+        <h2>Payment channels</h2>
+        <p className="muted small">
+          Channels shown on the payment screen. The kind drives drawer math (cash goes into the
+          till; wallets and cards do not).
+        </p>
+        <div className="row wrap mb">
+          {payments.channels.map((ch, i) => (
+            <button
+              key={ch.key}
+              className={ch.enabled ? 'primary' : ''}
+              onClick={() => {
+                const channels = payments.channels.slice();
+                channels[i] = { ...ch, enabled: !ch.enabled };
+                setPayments({ ...payments, channels });
+              }}
+            >
+              {ch.label} <span className="small">({ch.kind})</span>
+            </button>
+          ))}
+        </div>
+        <label>Static wallet / DuitNow QR payload (shown to customers when a wallet is selected)</label>
+        <input
+          value={payments.ewalletQrPayload}
+          onChange={(e) => setPayments({ ...payments, ewalletQrPayload: e.target.value })}
+          placeholder="Paste your DuitNow QR string here"
+          style={{ width: '100%' }}
+        />
+      </div>
+
+      <div className="panel mb">
+        <h2>LHDN e-Invoice (MyInvois)</h2>
+        <div className="row wrap mb">
+          <button className={einvoice.enabled ? 'primary' : ''} onClick={() => setEinvoice({ ...einvoice, enabled: !einvoice.enabled })}>
+            {einvoice.enabled ? 'Enabled' : 'Disabled'}
+          </button>
+          {(['mock', 'sandbox', 'production'] as const).map((env) => (
+            <button key={env} className={einvoice.environment === env ? 'primary' : ''}
+              onClick={() => setEinvoice({ ...einvoice, environment: env })}>
+              {env}
+            </button>
+          ))}
+        </div>
+        <p className="muted small">
+          mock simulates LHDN locally (for testing); sandbox is MyInvois pre-production; production
+          is live. Client ID/secret come from the MyTax ERP registration.
+        </p>
+        <div className="row">
+          <div className="grow mb">
+            <label>Client ID</label>
+            <input value={einvoice.clientId} onChange={(e) => setEinvoice({ ...einvoice, clientId: e.target.value })} style={{ width: '100%' }} />
+          </div>
+          <div className="grow mb">
+            <label>Client secret {einvoice.hasClientSecret ? '(stored — blank keeps it)' : ''}</label>
+            <input type="password" value={einvoiceSecret} onChange={(e) => setEinvoiceSecret(e.target.value)} style={{ width: '100%' }} />
+          </div>
+        </div>
+        <div className="row">
+          <div className="grow mb">
+            <label>Supplier TIN</label>
+            <input value={einvoice.supplierTin} onChange={(e) => setEinvoice({ ...einvoice, supplierTin: e.target.value })} placeholder="C1234567890" style={{ width: '100%' }} />
+          </div>
+          <div className="grow mb">
+            <label>BRN / registration no.</label>
+            <input value={einvoice.supplierIdValue} onChange={(e) => setEinvoice({ ...einvoice, supplierIdValue: e.target.value })} style={{ width: '100%' }} />
+          </div>
+          <div className="grow mb">
+            <label>SST no.</label>
+            <input value={einvoice.supplierSstNo} onChange={(e) => setEinvoice({ ...einvoice, supplierSstNo: e.target.value })} style={{ width: '100%' }} />
+          </div>
+        </div>
+        <div className="row">
+          <div className="grow mb">
+            <label>MSIC code</label>
+            <input value={einvoice.msicCode} onChange={(e) => setEinvoice({ ...einvoice, msicCode: e.target.value })} style={{ width: '100%' }} />
+          </div>
+          <div className="grow mb">
+            <label>State code</label>
+            <input value={einvoice.stateCode} onChange={(e) => setEinvoice({ ...einvoice, stateCode: e.target.value })} style={{ width: '100%' }} />
+          </div>
+          <div className="grow mb">
+            <label>Tax type (01 sales / 02 service)</label>
+            <input value={einvoice.taxTypeCode} onChange={(e) => setEinvoice({ ...einvoice, taxTypeCode: e.target.value })} style={{ width: '100%' }} />
+          </div>
+        </div>
+        <label>Business address (as registered)</label>
+        <input value={einvoice.addressLine} onChange={(e) => setEinvoice({ ...einvoice, addressLine: e.target.value })} style={{ width: '100%' }} />
       </div>
 
       <div className="panel mb">

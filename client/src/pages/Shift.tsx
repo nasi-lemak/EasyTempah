@@ -142,6 +142,23 @@ export default function ShiftPage() {
         </div>
       )}
 
+      {summary && summary.by_channel.length > 0 && (
+        <div className="panel mb" style={{ maxWidth: 480 }}>
+          <h2>By payment channel</h2>
+          <table className="data">
+            <tbody>
+              {summary.by_channel.map((c) => (
+                <tr key={c.channel}>
+                  <td>{c.channel}</td>
+                  <td className="num">{c.payments}×</td>
+                  <td className="num">{money(c.amount_cents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <h2>Cash movements</h2>
       <table className="data">
         <thead>

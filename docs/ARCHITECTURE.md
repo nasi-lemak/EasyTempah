@@ -121,6 +121,42 @@ rounding     = cash rounding (default: Malaysian 5-sen rounding) applied only
 Totals are recomputed server-side inside a SQLite transaction on every mutation;
 clients never submit prices.
 
+## Payments & channels
+
+Payments carry two identities: a **kind** (`cash` | `card` | `ewallet` | `other`)
+that drives drawer math and X-report grouping, and an optional **channel** —
+the specific instrument ("GrabPay", "DuitNow QR"), configured as an editable
+list in settings. The pay screen renders the enabled channels; choosing one
+resolves its kind server-side (clients never pick the kind directly when a
+channel key is sent). A static wallet/DuitNow QR payload from settings renders
+as a scan-to-pay code at the till for e-wallet channels. Shift summaries and
+reports break revenue down per channel; expected-drawer math remains keyed on
+the cash kind only.
+
+## LHDN MyInvois e-invoicing
+
+`services/einvoice/` implements Malaysia's e-invoice mandate in three layers:
+
+- **`ubl.ts`** — pure, unit-tested builder for UBL 2.1 JSON documents
+  (document version 1.0, no digital signature required): supplier/buyer parties
+  with TIN + registration schemes, MSIC industry code, per-line item
+  classification, document-level AllowanceCharge for discount and service
+  charge, order-level tax apportioned across lines with exact-total remainder
+  handling, and a LegalMonetaryTotal that reconciles to the sen (including
+  Malaysian cash rounding via PayableRoundingAmount).
+- **`client.ts`** — MyInvois transport: OAuth2 client-credentials token cache,
+  base64+SHA256 document submission, and status polling. Three environments:
+  `mock` (built-in simulator, no network — used in tests and demos), `sandbox`
+  (pre-prod) and `production`. The client secret never reaches the browser.
+- **`index.ts`** — orchestration + persistence in the `einvoices` table:
+  buyer-requested **individual** e-invoices for paid orders (TIN/ID validated,
+  one active document per order) and monthly **consolidated** e-invoices that
+  roll every un-invoiced paid receipt into one document against LHDN's
+  general-public TIN with classification code 004. Orders link to their
+  covering document via `orders.einvoice_id`; invalid/errored documents release
+  their orders for retry. Valid documents expose the MyInvois portal link,
+  which the receipt renders as a QR alongside the UUID.
+
 ## QR table ordering
 
 Every dining table carries a random `qr_token`; a printed QR points guests at

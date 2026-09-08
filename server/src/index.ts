@@ -6,6 +6,7 @@ import { requireAuth } from './middleware/auth';
 import { errorHandler } from './middleware/errors';
 import { addClient } from './realtime/bus';
 import { authRouter } from './routes/auth';
+import { einvoiceRouter } from './routes/einvoice';
 import { guestRouter } from './routes/guest';
 import { inventoryRouter } from './routes/inventory';
 import { kdsRouter } from './routes/kds';
@@ -35,6 +36,7 @@ app.use('/api/inventory', inventoryRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/print', printRouter);
+app.use('/api/einvoice', einvoiceRouter);
 
 // Server-Sent Events stream for realtime updates.
 app.get('/api/events', requireAuth, (req, res) => {

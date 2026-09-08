@@ -12,9 +12,10 @@ kitchen displays and the back office, all over the local network.
 - Takeaway and delivery orders
 - Menu with categories and item modifiers (required/optional groups, priced add-ons, kitchen notes)
 - Order-level discounts (percent/fixed, manager-gated above 20%), order notes, table transfer
-- Payments: cash (tendered/change), card, e-wallet; split bills by amount; Malaysian 5-sen cash rounding (configurable)
+- Payments: cash (tendered/change), card, and named e-wallet channels (Touch 'n Go, GrabPay, Boost, ShopeePay, DuitNow QR — configurable in Settings) with an on-screen scan-to-pay QR; split bills by amount; Malaysian 5-sen cash rounding (configurable). Shift and reports break sales down per channel while drawer math stays keyed on cash
 - Refunds (partial or full) with a manager-approval flow: managers refund directly, cashiers approve with a manager's PIN; refunds hit the drawer, shift reconciliation and reports
 - QR table ordering: guests scan a per-table code, browse the menu on their phone and send orders straight to the kitchen — items land on the table's tab marked 📱, guests watch their live tab with exact totals, and payment stays at the counter. Managers print the QR sheet and can rotate a table's code to invalidate printed ones
+- LHDN MyInvois e-invoicing: buyer-requested individual e-invoices captured at the till (TIN/ID validation, UBL 2.1 JSON, submission + validation tracking, MyInvois QR and UUID on the receipt) and one-click monthly consolidated e-invoices for walk-in receipts. Environments: built-in mock simulator for testing, MyInvois sandbox, and production
 - ESC/POS thermal printing over the network (raw port 9100): kitchen and bar tickets print automatically per station when orders are sent (QR guest orders included), receipts print from the payment screen with optional cash-drawer kick, and Settings has per-printer config with a test button. Browser printing remains as a fallback
 - Printable 80 mm thermal-style receipts
 

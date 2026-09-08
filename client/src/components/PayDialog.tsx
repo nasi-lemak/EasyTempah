@@ -1,10 +1,18 @@
-import { useState } from 'react';
+import QRCode from 'qrcode';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useMoney, useStore } from '../store';
-import type { Order, PaymentMethod } from '../types';
+import type { Order, PaymentChannel } from '../types';
 import Modal from './Modal';
 
 const QUICK_NOTES = [1000, 2000, 5000, 10000];
+
+const FALLBACK_CHANNELS: PaymentChannel[] = [
+  { key: 'cash', label: 'Cash', kind: 'cash', enabled: true },
+  { key: 'card', label: 'Card', kind: 'card', enabled: true },
+  { key: 'ewallet', label: 'E-Wallet', kind: 'ewallet', enabled: true },
+  { key: 'other', label: 'Other', kind: 'other', enabled: true },
+];
 
 export default function PayDialog({
   order,
@@ -19,15 +27,38 @@ export default function PayDialog({
 }) {
   const money = useMoney();
   const tax = useStore((s) => s.tax);
-  const [method, setMethod] = useState<PaymentMethod>('cash');
-  const [amountStr, setAmountStr] = useState(''); // in RM, e.g. "12.50"
+  const payments = useStore((s) => s.payments);
+  const channels = useMemo(
+    () => (payments?.channels ?? FALLBACK_CHANNELS).filter((c) => c.enabled),
+    [payments],
+  );
+  const [channelKey, setChannelKey] = useState(channels[0]?.key ?? 'cash');
+  const channel = channels.find((c) => c.key === channelKey) ?? channels[0];
+  const kind = channel?.kind ?? 'cash';
+
+  const [amountStr, setAmountStr] = useState('');
   const [tenderedStr, setTenderedStr] = useState('');
   const [reference, setReference] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [lastChange, setLastChange] = useState<number | null>(null);
+  const [walletQr, setWalletQr] = useState<string | null>(null);
 
   const balance = order.total_cents - order.paid_cents;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (kind === 'ewallet' && payments?.ewalletQrPayload) {
+      QRCode.toDataURL(payments.ewalletQrPayload, { width: 200, margin: 1 }).then((url) => {
+        if (!cancelled) setWalletQr(url);
+      });
+    } else {
+      setWalletQr(null);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, payments]);
 
   const parseCents = (s: string): number => Math.round(parseFloat(s || '0') * 100);
 
@@ -39,13 +70,14 @@ export default function PayDialog({
       const r = await api.post<{ change_cents: number; paid: boolean; order: Order }>(
         `/api/orders/${order.id}/payments`,
         {
-          method,
+          method: kind,
+          channel_key: channel?.key,
           amount_cents: amountCents,
           tendered_cents: tenderedCents,
           reference: reference.trim() || undefined,
         },
       );
-      setLastChange(method === 'cash' ? r.change_cents : null);
+      setLastChange(kind === 'cash' ? r.change_cents : null);
       setAmountStr('');
       setTenderedStr('');
       setReference('');
@@ -63,9 +95,9 @@ export default function PayDialog({
 
   const payExact = () => {
     // Mirror the server's cash rounding so "Exact" tenders the rounded balance.
-    const step = method === 'cash' && tax ? tax.cashRoundingCents : 0;
+    const step = kind === 'cash' && tax ? tax.cashRoundingCents : 0;
     const rounded = step > 1 ? Math.round(balance / step) * step : balance;
-    pay(rounded, method === 'cash' ? rounded : undefined);
+    pay(rounded, kind === 'cash' ? rounded : undefined);
   };
 
   const payCashTendered = () => {
@@ -83,13 +115,15 @@ export default function PayDialog({
       setError('Enter a split amount');
       return;
     }
-    pay(amount, method === 'cash' ? amount : undefined);
+    pay(amount, kind === 'cash' ? amount : undefined);
   };
 
   const roundingNote =
-    method === 'cash' && tax && tax.cashRoundingCents > 1
+    kind === 'cash' && tax && tax.cashRoundingCents > 1
       ? `Cash totals round to the nearest ${tax.cashRoundingCents} sen.`
       : null;
+
+  const byKind = (k: string) => channels.filter((c) => c.kind === k);
 
   return (
     <Modal title={`Payment — #${order.order_no}`} onClose={onClose}>
@@ -109,14 +143,28 @@ export default function PayDialog({
       </div>
 
       <div className="row wrap mb">
-        {(['cash', 'card', 'ewallet', 'other'] as PaymentMethod[]).map((m) => (
-          <button key={m} className={method === m ? 'primary' : ''} onClick={() => setMethod(m)}>
-            {m === 'ewallet' ? 'E-Wallet' : m[0].toUpperCase() + m.slice(1)}
+        {[...byKind('cash'), ...byKind('card')].map((c) => (
+          <button key={c.key} className={channelKey === c.key ? 'primary' : ''} onClick={() => setChannelKey(c.key)}>
+            {c.label}
           </button>
         ))}
       </div>
+      {byKind('ewallet').length > 0 && (
+        <div className="row wrap mb">
+          {byKind('ewallet').map((c) => (
+            <button key={c.key} className={channelKey === c.key ? 'primary' : ''} onClick={() => setChannelKey(c.key)}>
+              {c.label}
+            </button>
+          ))}
+          {byKind('other').map((c) => (
+            <button key={c.key} className={channelKey === c.key ? 'primary' : ''} onClick={() => setChannelKey(c.key)}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {method === 'cash' ? (
+      {kind === 'cash' ? (
         <>
           <div className="mb">
             <label>Cash received</label>
@@ -136,7 +184,7 @@ export default function PayDialog({
           <div className="row wrap mb">
             <button onClick={payExact} disabled={busy}>Exact</button>
             {QUICK_NOTES.map((n) => (
-              <button key={n} onClick={() => pay(n, n)} disabled={busy || n < 1}>
+              <button key={n} onClick={() => pay(n, n)} disabled={busy}>
                 {money(n)}
               </button>
             ))}
@@ -145,6 +193,12 @@ export default function PayDialog({
         </>
       ) : (
         <>
+          {walletQr && (
+            <div className="mb" style={{ textAlign: 'center' }}>
+              <img src={walletQr} alt="Payment QR" style={{ background: '#fff', padding: 8, borderRadius: 8 }} />
+              <div className="muted small">Customer scans to pay {money(balance)} via {channel?.label}</div>
+            </div>
+          )}
           <div className="mb">
             <label>Reference (approval code / txn id)</label>
             <input
@@ -154,7 +208,7 @@ export default function PayDialog({
             />
           </div>
           <button className="primary mb" onClick={() => pay(balance)} disabled={busy}>
-            Charge {money(balance)}
+            Confirm {channel?.label} · {money(balance)}
           </button>
         </>
       )}

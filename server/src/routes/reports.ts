@@ -84,10 +84,10 @@ reportsRouter.get('/payments', (req, res) => {
   const { from, to } = dateRange(req);
   const rows = db
     .prepare(
-      `SELECT p.method, COUNT(*) AS payments, SUM(p.amount_cents) AS total_cents
+      `SELECT COALESCE(p.channel, p.method) AS method, COUNT(*) AS payments, SUM(p.amount_cents) AS total_cents
        FROM payments p JOIN orders o ON o.id = p.order_id
        WHERE ${PAID_IN_RANGE}
-       GROUP BY p.method ORDER BY total_cents DESC`,
+       GROUP BY COALESCE(p.channel, p.method) ORDER BY total_cents DESC`,
     )
     .all(from, to);
   res.json({ from, to, payments: rows });

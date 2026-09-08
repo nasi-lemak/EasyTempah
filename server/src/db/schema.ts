@@ -210,6 +210,34 @@ const MIGRATIONS: string[] = [
   ALTER TABLE order_items ADD COLUMN source TEXT NOT NULL DEFAULT 'staff'
     CHECK (source IN ('staff','guest'));
   `,
+  // v5 — named payment channels + LHDN MyInvois e-invoices
+  `
+  ALTER TABLE payments ADD COLUMN channel TEXT;
+
+  CREATE TABLE einvoices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER REFERENCES orders(id),
+    type TEXT NOT NULL CHECK (type IN ('invoice','consolidated')),
+    status TEXT NOT NULL DEFAULT 'pending'
+      CHECK (status IN ('pending','submitted','valid','invalid','error')),
+    buyer_json TEXT,
+    document_json TEXT NOT NULL,
+    internal_id TEXT NOT NULL,
+    uuid TEXT,
+    long_id TEXT,
+    submission_uid TEXT,
+    error TEXT,
+    period TEXT,
+    total_cents INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX idx_einvoices_order ON einvoices(order_id);
+  CREATE INDEX idx_einvoices_status ON einvoices(status);
+
+  ALTER TABLE orders ADD COLUMN einvoice_id INTEGER REFERENCES einvoices(id);
+  `,
 ];
 
 export function applySchema(db: Database): void {

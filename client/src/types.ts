@@ -159,6 +159,63 @@ export interface TaxSettings {
   cashRoundingCents: number;
 }
 
+export interface PaymentChannel {
+  key: string;
+  label: string;
+  kind: PaymentMethod;
+  enabled: boolean;
+}
+
+export interface PaymentsSettings {
+  channels: PaymentChannel[];
+  ewalletQrPayload: string;
+}
+
+export type EinvoiceIdType = 'BRN' | 'NRIC' | 'PASSPORT' | 'ARMY';
+
+export interface EinvoiceSettings {
+  enabled: boolean;
+  environment: 'mock' | 'sandbox' | 'production';
+  clientId: string;
+  hasClientSecret: boolean;
+  supplierTin: string;
+  supplierIdType: EinvoiceIdType;
+  supplierIdValue: string;
+  supplierSstNo: string;
+  msicCode: string;
+  msicDescription: string;
+  classificationCode: string;
+  addressLine: string;
+  city: string;
+  postcode: string;
+  stateCode: string;
+  taxTypeCode: string;
+}
+
+export interface Einvoice {
+  id: number;
+  order_id: number | null;
+  order_no?: string | null;
+  type: 'invoice' | 'consolidated';
+  status: 'pending' | 'submitted' | 'valid' | 'invalid' | 'error';
+  buyer_json: string | null;
+  internal_id: string;
+  uuid: string | null;
+  long_id: string | null;
+  error: string | null;
+  period: string | null;
+  total_cents: number;
+  created_by_name?: string | null;
+  created_at: string;
+  portal_url: string | null;
+}
+
+export interface ReceiptEinvoice {
+  uuid: string;
+  status: string;
+  portal_url: string | null;
+}
+
 export interface PrinterTarget {
   enabled: boolean;
   host: string;
@@ -209,6 +266,7 @@ export interface ShiftSummary {
   refunds_cents: number;
   cash_refunds_cents: number;
   expected_cash_cents: number;
+  by_channel: { channel: string; payments: number; amount_cents: number }[];
 }
 
 export interface KdsLine extends OrderItem {

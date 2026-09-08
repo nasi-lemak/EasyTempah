@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { api } from './api';
-import { hasRole, useStore } from './store';
-import type { BusinessSettings, PrintersSettings, TaxSettings } from './types';
+import { hasRole, useStore, type SettingsBundle } from './store';
 import Login from './pages/Login';
 import Pos from './pages/Pos';
 import Tables from './pages/Tables';
@@ -16,6 +15,7 @@ import Users from './pages/Users';
 import SettingsPage from './pages/Settings';
 import GuestOrder from './pages/GuestOrder';
 import TableQr from './pages/TableQr';
+import Einvoices from './pages/Einvoices';
 
 function Sidebar() {
   const user = useStore((s) => s.user);
@@ -48,6 +48,7 @@ function Sidebar() {
       {isManager && <NavLink to="/reports">Reports</NavLink>}
       {isManager && <NavLink to="/menu-admin">Menu</NavLink>}
       {isManager && <NavLink to="/inventory">Inventory</NavLink>}
+      {isManager && <NavLink to="/einvoices">E-Invoices</NavLink>}
       {isAdmin && <NavLink to="/users">Users</NavLink>}
       {isAdmin && <NavLink to="/settings">Settings</NavLink>}
       <div className="spacer" />
@@ -69,8 +70,8 @@ export default function App() {
   useEffect(() => {
     if (!token) return;
     api
-      .get<{ business: BusinessSettings; tax: TaxSettings; printers?: PrintersSettings }>('/api/settings')
-      .then((r) => setSettings(r.business, r.tax, r.printers))
+      .get<SettingsBundle>('/api/settings')
+      .then((r) => setSettings(r))
       .catch(() => {
         /* 401 handled by api layer */
       });
@@ -114,6 +115,7 @@ export default function App() {
           <Route path="/users" element={<Users />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/table-qr" element={<TableQr />} />
+          <Route path="/einvoices" element={<Einvoices />} />
           <Route path="*" element={<Navigate to={home} replace />} />
         </Routes>
       </main>

@@ -5,7 +5,14 @@ import Modal from '../components/Modal';
 import Receipt from '../components/Receipt';
 import { hasRole, useMoney, useStore } from '../store';
 import { formatDateTime } from '../time';
-import type { BusinessSettings, Order, PaymentMethod, TaxSettings } from '../types';
+import type {
+  BusinessSettings,
+  Einvoice,
+  EinvoiceIdType,
+  Order,
+  PaymentMethod,
+  TaxSettings,
+} from '../types';
 import { useEvents } from '../useEvents';
 
 export default function Orders() {
@@ -16,9 +23,16 @@ export default function Orders() {
   const [status, setStatus] = useState<'all' | 'open' | 'paid' | 'void'>('all');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [orders, setOrders] = useState<Order[]>([]);
-  const [receipt, setReceipt] = useState<{ order: Order; business: BusinessSettings; tax: TaxSettings } | null>(null);
+  const [receipt, setReceipt] = useState<{
+    order: Order;
+    business: BusinessSettings;
+    tax: TaxSettings;
+    einvoice?: import('../types').ReceiptEinvoice | null;
+  } | null>(null);
   const [refundOrder, setRefundOrder] = useState<Order | null>(null);
+  const [einvOrder, setEinvOrder] = useState<Order | null>(null);
   const [error, setError] = useState('');
+  const einvoiceCfg = useStore((s) => s.einvoice);
 
   const load = useCallback(() => {
     const params = new URLSearchParams();
@@ -35,9 +49,12 @@ export default function Orders() {
   const openReceipt = async (orderId: number) => {
     setError('');
     try {
-      const r = await api.get<{ order: Order; business: BusinessSettings; tax: TaxSettings }>(
-        `/api/orders/${orderId}/receipt`,
-      );
+      const r = await api.get<{
+        order: Order;
+        business: BusinessSettings;
+        tax: TaxSettings;
+        einvoice?: import('../types').ReceiptEinvoice | null;
+      }>(`/api/orders/${orderId}/receipt`);
       setReceipt(r);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed');
@@ -98,6 +115,9 @@ export default function Orders() {
                 {o.status === 'paid' && o.refunded_cents < o.paid_cents && (
                   <button className="danger" onClick={() => setRefundOrder(o)}>Refund</button>
                 )}{' '}
+                {o.status === 'paid' && einvoiceCfg?.enabled && (
+                  <button onClick={() => setEinvOrder(o)}>e-Invoice</button>
+                )}{' '}
                 {o.status === 'open' && hasRole(user, 'manager') && (
                   <button className="danger" onClick={() => voidOrder(o.id)}>Void</button>
                 )}
@@ -112,7 +132,7 @@ export default function Orders() {
 
       {receipt && (
         <Modal title={`Receipt #${receipt.order.order_no}`} onClose={() => setReceipt(null)}>
-          <Receipt order={receipt.order} business={receipt.business} tax={receipt.tax} />
+          <Receipt order={receipt.order} business={receipt.business} tax={receipt.tax} einvoice={receipt.einvoice} />
           <div className="row mt">
             {printers?.receipt.enabled && (
               <button className="primary grow"
@@ -145,7 +165,127 @@ export default function Orders() {
           onClose={() => setRefundOrder(null)}
         />
       )}
+
+      {einvOrder && <EinvoiceDialog order={einvOrder} onClose={() => setEinvOrder(null)} />}
     </div>
+  );
+}
+
+const STATUS_BADGE: Record<string, string> = {
+  valid: 'paid',
+  submitted: 'sent',
+  pending: 'pending',
+  invalid: 'void',
+  error: 'void',
+};
+
+function EinvoiceDialog({ order, onClose }: { order: Order; onClose: () => void }) {
+  const [existing, setExisting] = useState<Einvoice | null | undefined>(undefined);
+  const [tin, setTin] = useState('');
+  const [idType, setIdType] = useState<EinvoiceIdType>('NRIC');
+  const [idValue, setIdValue] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api
+      .get<{ einvoice: Einvoice | null }>(`/api/einvoice/orders/${order.id}`)
+      .then((r) => setExisting(r.einvoice))
+      .catch(() => setExisting(null));
+  }, [order.id]);
+
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const r = await api.post<{ einvoice: Einvoice }>(`/api/einvoice/orders/${order.id}`, {
+        buyer: { tin, idType, idValue, name, email: email || undefined },
+      });
+      setExisting(r.einvoice);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Submission failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const refresh = async () => {
+    if (!existing) return;
+    const r = await api.post<{ einvoice: Einvoice }>(`/api/einvoice/${existing.id}/refresh`);
+    setExisting(r.einvoice);
+  };
+
+  if (existing === undefined) {
+    return (
+      <Modal title={`e-Invoice — #${order.order_no}`} onClose={onClose}>
+        <div className="muted">Loading…</div>
+      </Modal>
+    );
+  }
+
+  if (existing && ['pending', 'submitted', 'valid'].includes(existing.status)) {
+    const buyer = existing.buyer_json ? (JSON.parse(existing.buyer_json) as { name: string; tin: string }) : null;
+    return (
+      <Modal title={`e-Invoice — #${order.order_no}`} onClose={onClose}>
+        <p>
+          Status: <span className={`badge ${STATUS_BADGE[existing.status]}`}>{existing.status}</span>
+        </p>
+        {buyer && <p className="small">Buyer: {buyer.name} · TIN {buyer.tin}</p>}
+        {existing.uuid && (
+          <p className="small mono" style={{ wordBreak: 'break-all' }}>UUID: {existing.uuid}</p>
+        )}
+        {existing.portal_url && (
+          <p className="small">
+            <a href={existing.portal_url} target="_blank" rel="noreferrer" style={{ color: 'var(--info)' }}>
+              View on MyInvois portal ↗
+            </a>
+          </p>
+        )}
+        {existing.error && <div className="error-text">{existing.error}</div>}
+        <div className="row mt">
+          {existing.status === 'submitted' && <button onClick={refresh}>Check status</button>}
+          <button className="grow" onClick={onClose}>Close</button>
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title={`Issue e-Invoice — #${order.order_no}`} onClose={onClose}>
+      {existing && <div className="error-text mb">Previous attempt failed: {existing.error}</div>}
+      <p className="muted small">
+        Capture the buyer's details as shown on their MyTax profile. The e-invoice is submitted to
+        LHDN MyInvois for validation.
+      </p>
+      <label>Buyer TIN</label>
+      <input value={tin} onChange={(e) => setTin(e.target.value)} placeholder="e.g. IG1234567890" style={{ width: '100%' }} className="mb" />
+      <div className="row mb">
+        <div>
+          <label>ID type</label>
+          <select value={idType} onChange={(e) => setIdType(e.target.value as EinvoiceIdType)}>
+            <option value="NRIC">NRIC</option>
+            <option value="BRN">BRN (business)</option>
+            <option value="PASSPORT">Passport</option>
+            <option value="ARMY">Army</option>
+          </select>
+        </div>
+        <div className="grow">
+          <label>ID number</label>
+          <input value={idValue} onChange={(e) => setIdValue(e.target.value)} style={{ width: '100%' }} />
+        </div>
+      </div>
+      <label>Buyer name / company</label>
+      <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: '100%' }} className="mb" />
+      <label>Email (optional)</label>
+      <input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: '100%' }} className="mb" />
+      <button className="primary" onClick={submit} disabled={busy}>
+        {busy ? 'Submitting to LHDN…' : 'Submit e-Invoice'}
+      </button>
+      {error && <div className="error-text mt">{error}</div>}
+    </Modal>
   );
 }
 

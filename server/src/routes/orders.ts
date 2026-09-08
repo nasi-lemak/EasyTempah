@@ -20,8 +20,9 @@ import {
   type PayInput,
   type RefundInput,
 } from '../services/orders';
+import { einvoiceWithPortal } from '../services/einvoice';
 import { printKitchenTickets } from '../services/printer';
-import { getBusinessSettings, getTaxSettings } from '../services/settings';
+import { getBusinessSettings, getPaymentsSettings, getTaxSettings } from '../services/settings';
 import type { OrderType } from '../types';
 
 export const ordersRouter = Router();
@@ -145,7 +146,14 @@ ordersRouter.patch('/:id', (req: AuthedRequest, res) => {
 
 ordersRouter.post('/:id/payments', (req: AuthedRequest, res) => {
   const orderId = Number(req.params.id);
-  const b = req.body as PayInput;
+  const b = req.body as PayInput & { channel_key?: string };
+  // Preferred: a configured channel key; its kind becomes the payment method.
+  if (b.channel_key) {
+    const channel = getPaymentsSettings().channels.find((c) => c.key === b.channel_key && c.enabled);
+    if (!channel) throw badRequest('Unknown or disabled payment channel');
+    b.method = channel.kind;
+    b.channel = channel.label;
+  }
   if (!['cash', 'card', 'ewallet', 'other'].includes(b.method)) throw badRequest('Invalid payment method');
   const result = addPayment(orderId, b, req.user!.id);
   audit(req.user!.id, 'order.payment', { orderId, method: b.method, amount: b.amount_cents });
@@ -195,8 +203,18 @@ ordersRouter.post('/:id/void', requireRole('manager'), (req: AuthedRequest, res)
   res.json({ order: getOrder(orderId) });
 });
 
-/** Receipt payload: order + business/tax settings, ready for the print view. */
+/** Receipt payload: order + business/tax settings + e-invoice link, ready for the print view. */
 ordersRouter.get('/:id/receipt', (req, res) => {
   const order = getOrder(Number(req.params.id));
-  res.json({ order, business: getBusinessSettings(), tax: getTaxSettings() });
+  let einvoice: { uuid: string; status: string; portal_url: string | null } | null = null;
+  const row = db
+    .prepare(
+      "SELECT * FROM einvoices WHERE order_id = ? AND status IN ('submitted','valid') ORDER BY id DESC LIMIT 1",
+    )
+    .get(order.id) as import('../types').EinvoiceRow | undefined;
+  if (row?.uuid) {
+    const summary = einvoiceWithPortal(row);
+    einvoice = { uuid: row.uuid, status: row.status, portal_url: summary.portal_url };
+  }
+  res.json({ order, business: getBusinessSettings(), tax: getTaxSettings(), einvoice });
 });

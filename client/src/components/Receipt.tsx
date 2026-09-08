@@ -1,4 +1,6 @@
-import type { BusinessSettings, ModifierSnapshot, Order, TaxSettings } from '../types';
+import QRCode from 'qrcode';
+import { useEffect, useState } from 'react';
+import type { BusinessSettings, ModifierSnapshot, Order, ReceiptEinvoice, TaxSettings } from '../types';
 import { formatMoney } from '../store';
 
 const METHOD_LABEL: Record<string, string> = {
@@ -8,14 +10,42 @@ const METHOD_LABEL: Record<string, string> = {
   other: 'Other',
 };
 
+function EinvoiceBlock({ einvoice }: { einvoice: ReceiptEinvoice }) {
+  const [qr, setQr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!einvoice.portal_url) return;
+    let cancelled = false;
+    QRCode.toDataURL(einvoice.portal_url, { width: 110, margin: 0 }).then((url) => {
+      if (!cancelled) setQr(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [einvoice.portal_url]);
+  return (
+    <>
+      <hr />
+      <div className="center" style={{ fontWeight: 700 }}>LHDN e-Invoice ({einvoice.status})</div>
+      <div className="center" style={{ wordBreak: 'break-all', fontSize: 10 }}>{einvoice.uuid}</div>
+      {qr && (
+        <div className="center" style={{ marginTop: 4 }}>
+          <img src={qr} alt="MyInvois validation QR" style={{ width: 110, height: 110 }} />
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function Receipt({
   order,
   business,
   tax,
+  einvoice,
 }: {
   order: Order;
   business: BusinessSettings;
   tax: TaxSettings;
+  einvoice?: ReceiptEinvoice | null;
 }) {
   const money = (c: number | null | undefined) => formatMoney(c, business.currencySymbol);
   const lines = order.items.filter((i) => i.status !== 'cancelled');
@@ -121,6 +151,7 @@ export default function Receipt({
         </>
       )}
       <div className="center">{business.receiptFooter}</div>
+      {einvoice && <EinvoiceBlock einvoice={einvoice} />}
     </div>
   );
 }

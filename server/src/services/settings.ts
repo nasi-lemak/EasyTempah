@@ -1,5 +1,11 @@
 import { db } from '../db/connection';
-import type { BusinessSettings, PrintersSettings, TaxSettings } from '../types';
+import type {
+  BusinessSettings,
+  EinvoiceSettings,
+  PaymentsSettings,
+  PrintersSettings,
+  TaxSettings,
+} from '../types';
 
 export const DEFAULT_BUSINESS: BusinessSettings = {
   name: 'EasyTempah Café',
@@ -51,6 +57,51 @@ export const DEFAULT_PRINTERS: PrintersSettings = {
   kitchen: { enabled: false, host: '192.168.0.101', port: 9100 },
   bar: { enabled: false, host: '192.168.0.102', port: 9100 },
 };
+
+export const DEFAULT_PAYMENTS: PaymentsSettings = {
+  channels: [
+    { key: 'cash', label: 'Cash', kind: 'cash', enabled: true },
+    { key: 'card', label: 'Card', kind: 'card', enabled: true },
+    { key: 'tng', label: "Touch 'n Go eWallet", kind: 'ewallet', enabled: true },
+    { key: 'grabpay', label: 'GrabPay', kind: 'ewallet', enabled: true },
+    { key: 'boost', label: 'Boost', kind: 'ewallet', enabled: false },
+    { key: 'shopeepay', label: 'ShopeePay', kind: 'ewallet', enabled: false },
+    { key: 'duitnow', label: 'DuitNow QR', kind: 'ewallet', enabled: true },
+    { key: 'other', label: 'Other', kind: 'other', enabled: true },
+  ],
+  ewalletQrPayload: '',
+};
+
+export function getPaymentsSettings(): PaymentsSettings {
+  const stored = getSetting('payments', DEFAULT_PAYMENTS);
+  if (!Array.isArray(stored.channels) || stored.channels.length === 0) {
+    return { ...stored, channels: DEFAULT_PAYMENTS.channels };
+  }
+  return stored;
+}
+
+export const DEFAULT_EINVOICE: EinvoiceSettings = {
+  enabled: false,
+  environment: 'mock',
+  clientId: '',
+  clientSecret: '',
+  supplierTin: '',
+  supplierIdType: 'BRN',
+  supplierIdValue: '',
+  supplierSstNo: '',
+  msicCode: '56101',
+  msicDescription: 'Restaurants and restaurant chains',
+  classificationCode: '004',
+  addressLine: '',
+  city: 'Kuala Lumpur',
+  postcode: '50000',
+  stateCode: '14',
+  taxTypeCode: '02',
+};
+
+export function getEinvoiceSettings(): EinvoiceSettings {
+  return getSetting('einvoice', DEFAULT_EINVOICE);
+}
 
 export function getPrintersSettings(): PrintersSettings {
   const stored = getSetting('printers', DEFAULT_PRINTERS);
