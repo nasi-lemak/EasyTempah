@@ -64,6 +64,9 @@ export interface DiningTable {
   zone: string;
   seats: number;
   active: number;
+  pos_x: number | null; // percent (0-100) within the zone's floor canvas
+  pos_y: number | null;
+  shape: 'square' | 'round';
 }
 
 export interface Order {

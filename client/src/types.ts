@@ -62,11 +62,16 @@ export interface DiningTable {
   zone: string;
   seats: number;
   active: number;
+  pos_x: number | null;
+  pos_y: number | null;
+  shape: 'square' | 'round';
   order_id: number | null;
   order_no: string | null;
   total_cents: number | null;
   covers: number | null;
   order_opened_at: string | null;
+  cooking_lines: number | null;
+  ready_lines: number | null;
 }
 
 export interface ModifierSnapshot {

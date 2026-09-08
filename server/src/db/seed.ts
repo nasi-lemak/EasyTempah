@@ -105,12 +105,21 @@ const seed = db.transaction(() => {
   addItem(catDesserts, 'ABC (Ais Kacang)', 550, 'bar', [], 2);
   addItem(catDesserts, 'Pisang Goreng (4 pcs)', 450, 'kitchen', [], 3, 30);
 
-  // Tables
-  const insertTable = db.prepare('INSERT INTO dining_tables (name, zone, seats) VALUES (?, ?, ?)');
-  for (let i = 1; i <= 8; i++) insertTable.run(`T${i}`, 'Main Hall', i <= 4 ? 2 : 4);
-  for (let i = 1; i <= 4; i++) insertTable.run(`A${i}`, 'Outdoor', 4);
-  insertTable.run('VIP 1', 'VIP Room', 8);
-  insertTable.run('VIP 2', 'VIP Room', 10);
+  // Tables, laid out on the floor plan (pos_x/pos_y are % of the zone canvas)
+  const insertTable = db.prepare(
+    'INSERT INTO dining_tables (name, zone, seats, pos_x, pos_y, shape) VALUES (?, ?, ?, ?, ?, ?)',
+  );
+  const mainHall: [number, number][] = [
+    [14, 26], [38, 26], [62, 26], [86, 26],
+    [14, 72], [38, 72], [62, 72], [86, 72],
+  ];
+  mainHall.forEach(([x, y], i) =>
+    insertTable.run(`T${i + 1}`, 'Main Hall', i < 4 ? 2 : 4, x, y, 'square'),
+  );
+  const outdoor: [number, number][] = [[15, 40], [38, 40], [62, 40], [85, 40]];
+  outdoor.forEach(([x, y], i) => insertTable.run(`A${i + 1}`, 'Outdoor', 4, x, y, 'round'));
+  insertTable.run('VIP 1', 'VIP Room', 8, 30, 50, 'round');
+  insertTable.run('VIP 2', 'VIP Room', 10, 70, 50, 'round');
 });
 
 seed();

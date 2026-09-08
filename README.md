@@ -8,7 +8,8 @@ kitchen displays and the back office, all over the local network.
 ## Features
 
 **Front of house**
-- Dine-in with a live table map (zones, seats, occupancy, running totals), takeaway and delivery orders
+- Dine-in with a live spatial floor plan (tables positioned per zone, square/round shapes, occupancy, running totals, cooking / food-ready indicators) plus a grid fallback view; managers arrange the floor with a drag-and-drop layout editor
+- Takeaway and delivery orders
 - Menu with categories and item modifiers (required/optional groups, priced add-ons, kitchen notes)
 - Order-level discounts (percent/fixed, manager-gated above 20%), order notes, table transfer
 - Payments: cash (tendered/change), card, e-wallet; split bills by amount; Malaysian 5-sen cash rounding (configurable)

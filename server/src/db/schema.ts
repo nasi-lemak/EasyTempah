@@ -179,6 +179,13 @@ const MIGRATIONS: string[] = [
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   `,
+  // v2 — spatial floor plan: percentage coordinates per table within its zone
+  `
+  ALTER TABLE dining_tables ADD COLUMN pos_x REAL;
+  ALTER TABLE dining_tables ADD COLUMN pos_y REAL;
+  ALTER TABLE dining_tables ADD COLUMN shape TEXT NOT NULL DEFAULT 'square'
+    CHECK (shape IN ('square','round'));
+  `,
 ];
 
 export function applySchema(db: Database): void {

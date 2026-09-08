@@ -66,7 +66,13 @@ configurable.
 - **modifier_groups → modifiers** — e.g. "Sugar level" (pick 1), "Add-ons"
   (pick many, priced). Linked to items via `item_modifier_groups`.
 - **dining_tables** — floor layout by zone, seat count, live status derived from
-  open orders.
+  open orders. Each table carries optional `pos_x`/`pos_y` (percent coordinates
+  within its zone's floor canvas) and a `shape` (square/round) for the spatial
+  floor plan view; tables without coordinates fall back to a "not on the floor
+  plan" tray. Managers arrange the floor with a drag-and-drop editor that saves
+  via `POST /api/tables/layout`. Occupied tables also surface kitchen progress
+  (cooking / food-ready line counts) so front-of-house can see order state at a
+  glance.
 - **orders** — type (`dine_in` | `takeaway` | `delivery`), status
   (`open` | `paid` | `void`), snapshot totals (subtotal, discount, service
   charge, tax, rounding, grand total), linked shift.
