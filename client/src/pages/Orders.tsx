@@ -5,7 +5,7 @@ import Modal from '../components/Modal';
 import Receipt from '../components/Receipt';
 import { hasRole, useMoney, useStore } from '../store';
 import { formatDateTime } from '../time';
-import type { BusinessSettings, Order, TaxSettings } from '../types';
+import type { BusinessSettings, Order, PaymentMethod, TaxSettings } from '../types';
 import { useEvents } from '../useEvents';
 
 export default function Orders() {
@@ -16,6 +16,7 @@ export default function Orders() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [orders, setOrders] = useState<Order[]>([]);
   const [receipt, setReceipt] = useState<{ order: Order; business: BusinessSettings; tax: TaxSettings } | null>(null);
+  const [refundOrder, setRefundOrder] = useState<Order | null>(null);
   const [error, setError] = useState('');
 
   const load = useCallback(() => {
@@ -81,12 +82,21 @@ export default function Orders() {
               <td className="small muted">{formatDateTime(o.opened_at)}</td>
               <td>{o.type.replace('_', ' ')}</td>
               <td>{o.table_name ?? '—'}</td>
-              <td><span className={`badge ${o.status}`}>{o.status}</span>{o.void_reason ? <div className="small muted">{o.void_reason}</div> : null}</td>
+              <td>
+                <span className={`badge ${o.status}`}>{o.status}</span>
+                {o.refunded_cents > 0 && (
+                  <div className="small" style={{ color: 'var(--danger)' }}>refunded {money(o.refunded_cents)}</div>
+                )}
+                {o.void_reason ? <div className="small muted">{o.void_reason}</div> : null}
+              </td>
               <td className="num">{o.item_count}</td>
               <td className="num">{money(o.total_cents)}</td>
               <td className="right">
                 {o.status === 'open' && <button onClick={() => navigate(`/pos/${o.id}`)}>Open</button>}{' '}
                 {o.status === 'paid' && <button onClick={() => openReceipt(o.id)}>Receipt</button>}{' '}
+                {o.status === 'paid' && o.refunded_cents < o.paid_cents && (
+                  <button className="danger" onClick={() => setRefundOrder(o)}>Refund</button>
+                )}{' '}
                 {o.status === 'open' && hasRole(user, 'manager') && (
                   <button className="danger" onClick={() => voidOrder(o.id)}>Void</button>
                 )}
@@ -108,6 +118,97 @@ export default function Orders() {
           </div>
         </Modal>
       )}
+
+      {refundOrder && (
+        <RefundDialog
+          order={refundOrder}
+          needsPin={!hasRole(user, 'manager')}
+          onDone={() => {
+            setRefundOrder(null);
+            load();
+          }}
+          onClose={() => setRefundOrder(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function RefundDialog({
+  order,
+  needsPin,
+  onDone,
+  onClose,
+}: {
+  order: Order;
+  needsPin: boolean;
+  onDone: () => void;
+  onClose: () => void;
+}) {
+  const money = useMoney();
+  const refundable = order.paid_cents - order.refunded_cents;
+  const [amountStr, setAmountStr] = useState((refundable / 100).toFixed(2));
+  const [method, setMethod] = useState<PaymentMethod>('cash');
+  const [reason, setReason] = useState('');
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.post(`/api/orders/${order.id}/refunds`, {
+        method,
+        amount_cents: Math.round(parseFloat(amountStr || '0') * 100),
+        reason,
+        ...(needsPin ? { manager_pin: pin } : {}),
+      });
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Refund failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title={`Refund — #${order.order_no}`} onClose={onClose}>
+      <p className="muted small">
+        Paid {money(order.paid_cents)}
+        {order.refunded_cents > 0 && <> · already refunded {money(order.refunded_cents)}</>} ·
+        refundable <strong>{money(refundable)}</strong>
+      </p>
+      <label>Amount (RM)</label>
+      <input inputMode="decimal" value={amountStr} onChange={(e) => setAmountStr(e.target.value)} style={{ width: '100%' }} className="mb" />
+      <label>Refund via</label>
+      <div className="row wrap mb">
+        {(['cash', 'card', 'ewallet', 'other'] as PaymentMethod[]).map((m) => (
+          <button key={m} className={method === m ? 'primary' : ''} onClick={() => setMethod(m)}>
+            {m === 'ewallet' ? 'E-Wallet' : m[0].toUpperCase() + m.slice(1)}
+          </button>
+        ))}
+      </div>
+      <label>Reason</label>
+      <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. wrong order served" style={{ width: '100%' }} className="mb" />
+      {needsPin && (
+        <>
+          <label>Manager PIN (approval)</label>
+          <input
+            type="password"
+            inputMode="numeric"
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            style={{ width: '100%' }}
+            className="mb"
+          />
+        </>
+      )}
+      <button className="danger" onClick={submit} disabled={busy}>
+        Refund {money(Math.round(parseFloat(amountStr || '0') * 100))}
+      </button>
+      {error && <div className="error-text mt">{error}</div>}
+    </Modal>
   );
 }

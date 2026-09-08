@@ -108,6 +108,17 @@ export interface Payment {
   created_at: string;
 }
 
+export interface Refund {
+  id: number;
+  order_id: number;
+  method: PaymentMethod;
+  amount_cents: number;
+  reason: string;
+  user_name: string | null;
+  approved_by_name: string | null;
+  created_at: string;
+}
+
 export interface Order {
   id: number;
   order_no: string;
@@ -126,12 +137,14 @@ export interface Order {
   rounding_cents: number;
   total_cents: number;
   paid_cents: number;
+  refunded_cents: number;
   opened_by_name: string | null;
   opened_at: string;
   closed_at: string | null;
   void_reason: string | null;
   items: OrderItem[];
   payments: Payment[];
+  refunds: Refund[];
   item_count?: number;
 }
 
@@ -179,6 +192,8 @@ export interface ShiftSummary {
   orders_paid: number;
   cash_in_cents: number;
   cash_out_cents: number;
+  refunds_cents: number;
+  cash_refunds_cents: number;
   expected_cash_cents: number;
 }
 

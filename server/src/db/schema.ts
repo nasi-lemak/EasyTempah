@@ -186,6 +186,23 @@ const MIGRATIONS: string[] = [
   ALTER TABLE dining_tables ADD COLUMN shape TEXT NOT NULL DEFAULT 'square'
     CHECK (shape IN ('square','round'));
   `,
+  // v3 — refunds with manager approval
+  `
+  ALTER TABLE orders ADD COLUMN refunded_cents INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE refunds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL REFERENCES orders(id),
+    method TEXT NOT NULL CHECK (method IN ('cash','card','ewallet','other')),
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    reason TEXT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    approved_by INTEGER NOT NULL REFERENCES users(id),
+    shift_id INTEGER REFERENCES shifts(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX idx_refunds_order ON refunds(order_id);
+  CREATE INDEX idx_refunds_shift ON refunds(shift_id);
+  `,
 ];
 
 export function applySchema(db: Database): void {

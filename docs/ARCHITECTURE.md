@@ -81,6 +81,12 @@ configurable.
   `pending → sent → preparing → ready → served` (or `cancelled`).
 - **payments** — method (`cash` | `card` | `ewallet` | ...), amount, tendered &
   change for cash, reference for cards. Multiple payments per order = split bill.
+- **refunds** — money returned against a *paid* order (partial or full), each
+  row recording who took it and which manager approved it. Managers/admins
+  approve with their own session; a cashier must supply a manager's PIN, which
+  the server verifies against manager/admin scrypt hashes. Refunds reduce the
+  shift's expected cash (cash refunds), appear on receipts and X-reports, and
+  reports show gross vs. net (gross − refunds).
 - **shifts** & **cash_movements** — till sessions; expected cash is computed
   as float + cash sales − refunds + paid-ins − paid-outs.
 - **stock_movements** — audit trail for every stock change (sale, void

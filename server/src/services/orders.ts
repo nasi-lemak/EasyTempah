@@ -10,6 +10,7 @@ import type {
   OrderType,
   Payment,
   PaymentMethod,
+  Refund,
 } from '../types';
 import { audit } from './audit';
 import { cashRoundingAdjustment, computeTotals } from './orderMath';
@@ -18,6 +19,7 @@ import { getTaxSettings } from './settings';
 export interface OrderWithLines extends Order {
   items: OrderItem[];
   payments: Payment[];
+  refunds: (Refund & { user_name: string | null; approved_by_name: string | null })[];
   table_name: string | null;
   opened_by_name: string | null;
 }
@@ -39,6 +41,15 @@ export function getOrder(id: number): OrderWithLines {
   order.payments = db
     .prepare('SELECT * FROM payments WHERE order_id = ? ORDER BY id')
     .all(id) as Payment[];
+  order.refunds = db
+    .prepare(
+      `SELECT r.*, u.name AS user_name, a.name AS approved_by_name
+       FROM refunds r
+       LEFT JOIN users u ON u.id = r.user_id
+       LEFT JOIN users a ON a.id = r.approved_by
+       WHERE r.order_id = ? ORDER BY r.id`,
+    )
+    .all(id) as OrderWithLines['refunds'];
   return order;
 }
 
@@ -351,9 +362,47 @@ export const addPayment = db.transaction(
   },
 );
 
+export interface RefundInput {
+  method: PaymentMethod;
+  amount_cents: number;
+  reason: string;
+}
+
+/** Refund part or all of a PAID order's takings. approvedBy must already be verified as manager+. */
+export const addRefund = db.transaction(
+  (orderId: number, input: RefundInput, userId: number, approvedBy: number): void => {
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Order | undefined;
+    if (!order) throw notFound('Order not found');
+    if (order.status !== 'paid') throw conflict('Only paid orders can be refunded');
+    if (!Number.isInteger(input.amount_cents) || input.amount_cents <= 0) {
+      throw badRequest('Invalid refund amount');
+    }
+    const refundable = order.paid_cents - order.refunded_cents;
+    if (input.amount_cents > refundable) {
+      throw badRequest(`Refund exceeds the refundable balance (${refundable} sen left)`);
+    }
+    if (!input.reason.trim()) throw badRequest('Refund reason required');
+    db.prepare(
+      `INSERT INTO refunds (order_id, method, amount_cents, reason, user_id, approved_by, shift_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(orderId, input.method, input.amount_cents, input.reason.trim(), userId, approvedBy, currentShiftId());
+    db.prepare('UPDATE orders SET refunded_cents = refunded_cents + ? WHERE id = ?').run(
+      input.amount_cents,
+      orderId,
+    );
+    audit(userId, 'order.refund', {
+      orderId,
+      method: input.method,
+      amount: input.amount_cents,
+      reason: input.reason.trim(),
+      approvedBy,
+    });
+  },
+);
+
 export const voidOrder = db.transaction((orderId: number, reason: string, userId: number): void => {
   const order = requireOpenOrder(orderId);
-  if (order.paid_cents > 0) throw conflict('Order has payments — refund is not supported, close the shift with a note');
+  if (order.paid_cents > 0) throw conflict('Order has payments — use a refund instead of voiding');
   const sentLines = db
     .prepare("SELECT * FROM order_items WHERE order_id = ? AND status NOT IN ('pending','cancelled')")
     .all(orderId) as OrderItem[];

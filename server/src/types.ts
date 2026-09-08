@@ -86,6 +86,7 @@ export interface Order {
   rounding_cents: number;
   total_cents: number;
   paid_cents: number;
+  refunded_cents: number;
   shift_id: number | null;
   opened_by: number;
   opened_at: string;
@@ -125,6 +126,18 @@ export interface Payment {
   change_cents: number | null;
   reference: string | null;
   user_id: number;
+  shift_id: number | null;
+  created_at: string;
+}
+
+export interface Refund {
+  id: number;
+  order_id: number;
+  method: PaymentMethod;
+  amount_cents: number;
+  reason: string;
+  user_id: number;
+  approved_by: number;
   shift_id: number | null;
   created_at: string;
 }

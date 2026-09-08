@@ -46,8 +46,25 @@ reportsRouter.get('/summary', (req, res) => {
     )
     .all(from, to);
 
+  const refunds = db
+    .prepare(
+      `SELECT COALESCE(SUM(amount_cents), 0) AS total, COUNT(*) AS n
+       FROM refunds WHERE date(created_at, 'localtime') BETWEEN ? AND ?`,
+    )
+    .get(from, to) as { total: number; n: number };
+
   const avg = totals.orders > 0 ? Math.round(totals.gross_cents / totals.orders) : 0;
-  res.json({ from, to, ...totals, void_orders: voids.n, avg_order_cents: avg, by_type: byType });
+  res.json({
+    from,
+    to,
+    ...totals,
+    void_orders: voids.n,
+    avg_order_cents: avg,
+    refunds_cents: refunds.total,
+    refund_count: refunds.n,
+    net_cents: totals.gross_cents - refunds.total,
+    by_type: byType,
+  });
 });
 
 reportsRouter.get('/items', (req, res) => {

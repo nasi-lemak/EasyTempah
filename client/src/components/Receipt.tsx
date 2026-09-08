@@ -109,7 +109,17 @@ export default function Receipt({
           )}
         </div>
       ))}
-      <hr />
+      {order.refunds.length > 0 && (
+        <>
+          {order.refunds.map((r) => (
+            <div className="rrow" key={r.id}>
+              <span>REFUND ({METHOD_LABEL[r.method] ?? r.method}) — {r.reason}</span>
+              <span>-{money(r.amount_cents)}</span>
+            </div>
+          ))}
+          <hr />
+        </>
+      )}
       <div className="center">{business.receiptFooter}</div>
     </div>
   );

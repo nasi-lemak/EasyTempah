@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { db } from '../db/connection';
-import { AuthedRequest, requireAuth, requireRole } from '../middleware/auth';
+import { AuthedRequest, requireAuth, requireRole, verifyPin } from '../middleware/auth';
 import { badRequest } from '../middleware/errors';
 import { publish } from '../realtime/bus';
 import { audit } from '../services/audit';
 import {
   addItems,
   addPayment,
+  addRefund,
   cancelLine,
   createOrder,
   getOrder,
@@ -17,6 +18,7 @@ import {
   voidOrder,
   type AddLineInput,
   type PayInput,
+  type RefundInput,
 } from '../services/orders';
 import { getBusinessSettings, getTaxSettings } from '../services/settings';
 import type { OrderType } from '../types';
@@ -148,6 +150,35 @@ ordersRouter.post('/:id/payments', (req: AuthedRequest, res) => {
   publish('orders');
   if (result.paid) publish('tables');
   res.json({ ...result, order: getOrder(orderId) });
+});
+
+/**
+ * Refund a paid order. Managers/admins approve with their own session;
+ * cashiers must supply a manager's PIN (`manager_pin`) for approval.
+ */
+ordersRouter.post('/:id/refunds', (req: AuthedRequest, res) => {
+  const orderId = Number(req.params.id);
+  const b = req.body as RefundInput & { manager_pin?: string };
+  if (!['cash', 'card', 'ewallet', 'other'].includes(b.method)) throw badRequest('Invalid refund method');
+
+  let approvedBy: number | null = null;
+  if (['manager', 'admin'].includes(req.user!.role)) {
+    approvedBy = req.user!.id;
+  } else if (b.manager_pin && /^\d{4,8}$/.test(b.manager_pin)) {
+    const managers = db
+      .prepare("SELECT id, pin_hash FROM users WHERE active = 1 AND role IN ('manager','admin')")
+      .all() as { id: number; pin_hash: string }[];
+    approvedBy = managers.find((m) => verifyPin(b.manager_pin!, m.pin_hash))?.id ?? null;
+  }
+  if (!approvedBy) {
+    res.status(403).json({ error: 'Manager approval required — enter a valid manager PIN' });
+    return;
+  }
+
+  addRefund(orderId, { method: b.method, amount_cents: b.amount_cents, reason: b.reason ?? '' }, req.user!.id, approvedBy);
+  publish('orders');
+  publish('shifts');
+  res.status(201).json({ order: getOrder(orderId) });
 });
 
 ordersRouter.post('/:id/void', requireRole('manager'), (req: AuthedRequest, res) => {

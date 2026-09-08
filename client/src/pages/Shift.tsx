@@ -135,6 +135,9 @@ export default function ShiftPage() {
           <div className="stat"><div className="label">Cash</div><div className="value">{money(summary.cash_sales_cents)}</div></div>
           <div className="stat"><div className="label">Card</div><div className="value">{money(summary.card_sales_cents)}</div></div>
           <div className="stat"><div className="label">E-Wallet</div><div className="value">{money(summary.ewallet_sales_cents)}</div></div>
+          {summary.refunds_cents > 0 && (
+            <div className="stat"><div className="label">Refunds</div><div className="value" style={{ color: 'var(--danger)' }}>-{money(summary.refunds_cents)}</div></div>
+          )}
           <div className="stat"><div className="label">Expected in drawer</div><div className="value">{money(summary.expected_cash_cents)}</div></div>
         </div>
       )}

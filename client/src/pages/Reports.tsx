@@ -11,6 +11,9 @@ interface Summary {
   covers: number;
   void_orders: number;
   avg_order_cents: number;
+  refunds_cents: number;
+  refund_count: number;
+  net_cents: number;
   by_type: { type: string; orders: number; total_cents: number }[];
 }
 
@@ -64,6 +67,10 @@ export default function Reports() {
       {summary && (
         <div className="stat-grid mb">
           <div className="stat"><div className="label">Gross sales</div><div className="value">{money(summary.gross_cents)}</div></div>
+          <div className="stat"><div className="label">Net sales</div><div className="value">{money(summary.net_cents)}</div></div>
+          {summary.refunds_cents > 0 && (
+            <div className="stat"><div className="label">Refunds ({summary.refund_count})</div><div className="value" style={{ color: 'var(--danger)' }}>-{money(summary.refunds_cents)}</div></div>
+          )}
           <div className="stat"><div className="label">Orders</div><div className="value">{summary.orders}</div></div>
           <div className="stat"><div className="label">Avg order</div><div className="value">{money(summary.avg_order_cents)}</div></div>
           <div className="stat"><div className="label">Covers</div><div className="value">{summary.covers}</div></div>

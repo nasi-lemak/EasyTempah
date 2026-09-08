@@ -13,6 +13,7 @@ kitchen displays and the back office, all over the local network.
 - Menu with categories and item modifiers (required/optional groups, priced add-ons, kitchen notes)
 - Order-level discounts (percent/fixed, manager-gated above 20%), order notes, table transfer
 - Payments: cash (tendered/change), card, e-wallet; split bills by amount; Malaysian 5-sen cash rounding (configurable)
+- Refunds (partial or full) with a manager-approval flow: managers refund directly, cashiers approve with a manager's PIN; refunds hit the drawer, shift reconciliation and reports
 - Printable 80 mm thermal-style receipts
 
 **Kitchen**

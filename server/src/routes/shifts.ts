@@ -24,6 +24,8 @@ interface ShiftSummary {
   orders_paid: number;
   cash_in_cents: number;
   cash_out_cents: number;
+  refunds_cents: number;
+  cash_refunds_cents: number;
   expected_cash_cents: number;
 }
 
@@ -49,6 +51,13 @@ function summarize(shift: Shift): ShiftSummary {
   const card = byMethod.card ?? 0;
   const ewallet = byMethod.ewallet ?? 0;
   const other = byMethod.other ?? 0;
+  const refunds = db
+    .prepare(
+      `SELECT COALESCE(SUM(amount_cents), 0) AS total,
+              COALESCE(SUM(CASE WHEN method = 'cash' THEN amount_cents ELSE 0 END), 0) AS cash
+       FROM refunds WHERE shift_id = ?`,
+    )
+    .get(shift.id) as { total: number; cash: number };
   return {
     cash_sales_cents: cash,
     card_sales_cents: card,
@@ -58,7 +67,9 @@ function summarize(shift: Shift): ShiftSummary {
     orders_paid: orders,
     cash_in_cents: cashIn,
     cash_out_cents: cashOut,
-    expected_cash_cents: shift.opening_float_cents + cash + cashIn - cashOut,
+    refunds_cents: refunds.total,
+    cash_refunds_cents: refunds.cash,
+    expected_cash_cents: shift.opening_float_cents + cash + cashIn - cashOut - refunds.cash,
   };
 }
 
