@@ -186,13 +186,22 @@ export default function SettingsPage() {
             </button>
           ))}
         </div>
-        <label>Static wallet / DuitNow QR payload (shown to customers when a wallet is selected)</label>
-        <input
-          value={payments.ewalletQrPayload}
-          onChange={(e) => setPayments({ ...payments, ewalletQrPayload: e.target.value })}
-          placeholder="Paste your DuitNow QR string here"
-          style={{ width: '100%' }}
-        />
+        <label>Static wallet / DuitNow QR payload (from your bank / acquirer)</label>
+        <div className="row">
+          <input
+            value={payments.ewalletQrPayload}
+            onChange={(e) => setPayments({ ...payments, ewalletQrPayload: e.target.value })}
+            placeholder="Paste your DuitNow QR string here"
+            className="grow"
+          />
+          <a href="/payment-qr">
+            <button type="button">Print counter card</button>
+          </a>
+        </div>
+        <div className="muted small mt">
+          Powers both the printable counter standee and the on-screen QR shown when a cashier
+          selects a wallet. Save before printing.
+        </div>
       </div>
 
       <div className="panel mb">

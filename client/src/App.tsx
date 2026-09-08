@@ -16,6 +16,7 @@ import SettingsPage from './pages/Settings';
 import GuestOrder from './pages/GuestOrder';
 import TableQr from './pages/TableQr';
 import Einvoices from './pages/Einvoices';
+import PaymentQr from './pages/PaymentQr';
 
 function Sidebar() {
   const user = useStore((s) => s.user);
@@ -116,6 +117,7 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/table-qr" element={<TableQr />} />
           <Route path="/einvoices" element={<Einvoices />} />
+          <Route path="/payment-qr" element={<PaymentQr />} />
           <Route path="*" element={<Navigate to={home} replace />} />
         </Routes>
       </main>
