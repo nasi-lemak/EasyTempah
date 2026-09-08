@@ -14,6 +14,7 @@ kitchen displays and the back office, all over the local network.
 - Order-level discounts (percent/fixed, manager-gated above 20%), order notes, table transfer
 - Payments: cash (tendered/change), card, e-wallet; split bills by amount; Malaysian 5-sen cash rounding (configurable)
 - Refunds (partial or full) with a manager-approval flow: managers refund directly, cashiers approve with a manager's PIN; refunds hit the drawer, shift reconciliation and reports
+- QR table ordering: guests scan a per-table code, browse the menu on their phone and send orders straight to the kitchen — items land on the table's tab marked 📱, guests watch their live tab with exact totals, and payment stays at the counter. Managers print the QR sheet and can rotate a table's code to invalidate printed ones
 - Printable 80 mm thermal-style receipts
 
 **Kitchen**

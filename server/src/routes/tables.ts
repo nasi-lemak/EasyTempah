@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db } from '../db/connection';
+import { db, newQrToken } from '../db/connection';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { badRequest, notFound } from '../middleware/errors';
 import { publish } from '../realtime/bus';
@@ -54,10 +54,20 @@ tablesRouter.post('/', requireRole('manager'), (req, res) => {
   const { name, zone, seats } = req.body as Partial<DiningTable>;
   if (!name?.trim()) throw badRequest('Table name required');
   const info = db
-    .prepare('INSERT INTO dining_tables (name, zone, seats) VALUES (?, ?, ?)')
-    .run(name.trim(), zone?.trim() || 'Main', seats ?? 2);
+    .prepare('INSERT INTO dining_tables (name, zone, seats, qr_token) VALUES (?, ?, ?, ?)')
+    .run(name.trim(), zone?.trim() || 'Main', seats ?? 2, newQrToken());
   publish('tables');
   res.status(201).json({ id: Number(info.lastInsertRowid) });
+});
+
+/** Rotate a table's QR ordering token, invalidating any printed codes. */
+tablesRouter.post('/:id/qr-rotate', requireRole('manager'), (req, res) => {
+  const info = db
+    .prepare('UPDATE dining_tables SET qr_token = ? WHERE id = ?')
+    .run(newQrToken(), req.params.id);
+  if (info.changes === 0) throw notFound();
+  publish('tables');
+  res.json({ ok: true });
 });
 
 tablesRouter.patch('/:id', requireRole('manager'), (req, res) => {

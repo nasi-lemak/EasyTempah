@@ -340,9 +340,60 @@ table.data tr.clickable:hover td { background: var(--bg-raised); }
 .receipt .rrow .l { flex: 1; }
 .receipt .grand { font-weight: 800; font-size: 13px; }
 
+/* ---------- Guest QR ordering ---------- */
+.guest-wrap { max-width: 560px; margin: 0 auto; padding: 0.8rem 0.9rem 5.5rem; }
+.guest-head { display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0 0.9rem; gap: 0.6rem; }
+.guest-head .gname { font-weight: 800; font-size: 1.2rem; color: var(--accent); }
+.guest-sent {
+  background: rgba(45, 212, 167, 0.14);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: var(--radius);
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.guest-items { display: flex; flex-direction: column; gap: 0.5rem; }
+.guest-item { display: flex; align-items: center; gap: 0.7rem; padding: 0.8rem 0.9rem; }
+.guest-item .price { color: var(--accent); font-weight: 700; white-space: nowrap; }
+.guest-item .add {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-text);
+  display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0;
+}
+.guest-cartbar {
+  position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%);
+  width: min(92vw, 530px);
+  background: var(--accent); color: var(--accent-text);
+  border-radius: 14px; padding: 0.9rem 1.2rem;
+  display: flex; justify-content: space-between;
+  font-weight: 800; font-size: 1.05rem;
+  cursor: pointer; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* ---------- QR print sheet ---------- */
+.qr-sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.8rem; }
+.qr-card {
+  background: #fff; color: #111;
+  border-radius: 12px; padding: 1rem;
+  display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+  text-align: center;
+  break-inside: avoid;
+}
+.qr-card img { width: 180px; height: 180px; }
+.qr-card .qr-biz { font-weight: 700; font-size: 0.85rem; color: #333; }
+.qr-card .qr-table { font-weight: 800; font-size: 1.5rem; }
+.qr-card .qr-zone { color: #666; font-size: 0.8rem; }
+.qr-card .qr-hint { font-weight: 700; font-size: 0.9rem; margin-top: 0.2rem; }
+.qr-card button { margin-top: 0.4rem; color: #333; background: #eee; border-color: #ccc; }
+
 @media print {
   body { background: #fff; }
-  body * { visibility: hidden; }
+  body:has(.receipt) * { visibility: hidden; }
   .receipt, .receipt * { visibility: visible; }
   .receipt { position: absolute; left: 0; top: 0; width: 100%; }
+  body:has(.qr-sheet) .sidebar, body:has(.qr-sheet) .no-print { display: none; }
+  body:has(.qr-sheet) .main { padding: 0; }
+  .qr-card { border: 1px solid #ccc; }
 }

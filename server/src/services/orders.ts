@@ -135,8 +135,14 @@ export interface AddLineInput {
   notes?: string | null;
 }
 
-export const addItems = db.transaction((orderId: number, lines: AddLineInput[]): void => {
-  requireOpenOrder(orderId);
+interface InsertOpts {
+  status: 'pending' | 'sent'; // 'sent' fires straight to the kitchen and deducts stock
+  source: 'staff' | 'guest';
+  userId: number | null;
+}
+
+/** Validate and insert order lines. Call inside a transaction; caller recomputes totals. */
+function insertLines(orderId: number, lines: AddLineInput[], opts: InsertOpts): void {
   if (!lines.length) throw badRequest('No items to add');
 
   const itemStmt = db.prepare('SELECT * FROM items WHERE id = ? AND active = 1');
@@ -171,10 +177,21 @@ export const addItems = db.transaction((orderId: number, lines: AddLineInput[]):
       });
     }
 
+    if (opts.status === 'sent' && item.track_stock) {
+      if (item.stock_qty < line.qty) {
+        throw conflict(`Not enough stock for "${item.name}" (have ${item.stock_qty}, need ${line.qty})`);
+      }
+      db.prepare('UPDATE items SET stock_qty = stock_qty - ? WHERE id = ?').run(line.qty, item.id);
+      db.prepare(
+        'INSERT INTO stock_movements (item_id, delta, reason, ref, user_id) VALUES (?, ?, ?, ?, ?)',
+      ).run(item.id, -line.qty, 'sale', `order:${orderId}`, opts.userId);
+    }
+
     const modSum = snapshots.reduce((s, m) => s + m.price_delta_cents, 0);
     db.prepare(
-      `INSERT INTO order_items (order_id, item_id, name, qty, unit_price_cents, modifiers_json, notes, station, line_total_cents)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO order_items (order_id, item_id, name, qty, unit_price_cents, modifiers_json, notes,
+         station, line_total_cents, source, status, sent_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       orderId,
       item.id,
@@ -185,10 +202,85 @@ export const addItems = db.transaction((orderId: number, lines: AddLineInput[]):
       line.notes ?? null,
       item.station,
       line.qty * (item.price_cents + modSum),
+      opts.source,
+      opts.status,
+      opts.status === 'sent' ? new Date().toISOString().replace('T', ' ').slice(0, 19) : null,
     );
   }
+}
+
+export const addItems = db.transaction((orderId: number, lines: AddLineInput[]): void => {
+  requireOpenOrder(orderId);
+  insertLines(orderId, lines, { status: 'pending', source: 'staff', userId: null });
   recomputeTotals(orderId);
 });
+
+/** Look up (or lazily create) the system user that owns QR guest orders. */
+function getGuestUserId(): number {
+  const stored = db.prepare('SELECT value FROM settings WHERE key = ?').get('guest_user') as
+    | { value: string }
+    | undefined;
+  if (stored) {
+    const id = (JSON.parse(stored.value) as { id: number }).id;
+    if (db.prepare('SELECT 1 FROM users WHERE id = ?').get(id)) return id;
+  }
+  const info = db
+    .prepare('INSERT INTO users (name, role, pin_hash, active) VALUES (?, ?, ?, 0)')
+    .run('QR Guest', 'kitchen', 'disabled');
+  const id = Number(info.lastInsertRowid);
+  db.prepare(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+  ).run('guest_user', JSON.stringify({ id }));
+  return id;
+}
+
+const MAX_GUEST_LINES = 20;
+const MAX_GUEST_QTY = 20;
+
+/**
+ * A guest at a table (identified by its QR token) submits items. They land on
+ * the table's open tab — created if needed — already fired to the kitchen.
+ */
+export const guestSubmitOrder = db.transaction((token: string, lines: AddLineInput[]): number => {
+  const table = db
+    .prepare('SELECT * FROM dining_tables WHERE qr_token = ? AND active = 1')
+    .get(token) as { id: number } | undefined;
+  if (!table) throw notFound('This ordering code is no longer valid');
+  if (!Array.isArray(lines) || lines.length === 0) throw badRequest('No items to order');
+  if (lines.length > MAX_GUEST_LINES) throw badRequest(`At most ${MAX_GUEST_LINES} lines per submission`);
+  for (const l of lines) {
+    if (!Number.isInteger(l.qty) || l.qty < 1 || l.qty > MAX_GUEST_QTY) throw badRequest('Invalid quantity');
+    if (typeof l.notes === 'string' && l.notes.length > 200) throw badRequest('Note too long');
+  }
+
+  const guestId = getGuestUserId();
+  let order = db
+    .prepare("SELECT * FROM orders WHERE table_id = ? AND status = 'open'")
+    .get(table.id) as Order | undefined;
+  if (!order) {
+    const id = createOrder({ type: 'dine_in', table_id: table.id, covers: 1 }, guestId);
+    order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as Order;
+  }
+
+  insertLines(order.id, lines, { status: 'sent', source: 'guest', userId: guestId });
+  recomputeTotals(order.id);
+  return order.id;
+});
+
+/** The table (and its open order, if any) behind a QR token — for the guest view. */
+export function guestTableState(token: string): {
+  table: { id: number; name: string; zone: string };
+  order: OrderWithLines | null;
+} {
+  const table = db
+    .prepare('SELECT id, name, zone FROM dining_tables WHERE qr_token = ? AND active = 1')
+    .get(token) as { id: number; name: string; zone: string } | undefined;
+  if (!table) throw notFound('This ordering code is no longer valid');
+  const open = db
+    .prepare("SELECT id FROM orders WHERE table_id = ? AND status = 'open'")
+    .get(table.id) as { id: number } | undefined;
+  return { table, order: open ? getOrder(open.id) : null };
+}
 
 export const updateLine = db.transaction(
   (orderId: number, lineId: number, patch: { qty?: number; notes?: string | null }, userId: number): void => {

@@ -121,6 +121,21 @@ rounding     = cash rounding (default: Malaysian 5-sen rounding) applied only
 Totals are recomputed server-side inside a SQLite transaction on every mutation;
 clients never submit prices.
 
+## QR table ordering
+
+Every dining table carries a random `qr_token`; a printed QR points guests at
+`/order/<token>`, a public mobile page served by the same app. The unauthenticated
+`/api/guest/:token/*` endpoints are the only public surface and are strictly
+token-scoped: menu browsing, viewing the table's own tab (totals and items,
+never payments or staff data), and submitting items. Guest submissions reuse the
+exact server-side validation as the staff POS (no client-trusted prices), land
+on the table's open tab — created under a hidden, login-disabled "QR Guest"
+system user when needed — already fired to the kitchen with stock deducted, and
+are flagged `source = 'guest'` so the POS cart and KDS mark them 📱. Submission
+size and quantities are capped. Managers print the QR sheet from the back office
+and can rotate any table's token, which immediately invalidates printed codes.
+Payment remains a staff action at the counter.
+
 ## Realtime
 
 `GET /api/events` is an SSE stream. Mutating routes publish coarse-grained

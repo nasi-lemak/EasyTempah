@@ -6,6 +6,7 @@ import { requireAuth } from './middleware/auth';
 import { errorHandler } from './middleware/errors';
 import { addClient } from './realtime/bus';
 import { authRouter } from './routes/auth';
+import { guestRouter } from './routes/guest';
 import { inventoryRouter } from './routes/inventory';
 import { kdsRouter } from './routes/kds';
 import { menuRouter } from './routes/menu';
@@ -22,6 +23,7 @@ app.use(express.json({ limit: '1mb' }));
 app.get('/api/health', (_req, res) => res.json({ ok: true, name: 'EasyTempah POS' }));
 
 app.use('/api/auth', authRouter);
+app.use('/api/guest', guestRouter); // public: QR table ordering, token-scoped
 app.use('/api/menu', menuRouter);
 app.use('/api/tables', tablesRouter);
 app.use('/api/orders', ordersRouter);

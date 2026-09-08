@@ -203,6 +203,13 @@ const MIGRATIONS: string[] = [
   CREATE INDEX idx_refunds_order ON refunds(order_id);
   CREATE INDEX idx_refunds_shift ON refunds(shift_id);
   `,
+  // v4 — QR table ordering: per-table guest tokens, line provenance
+  `
+  ALTER TABLE dining_tables ADD COLUMN qr_token TEXT;
+  CREATE UNIQUE INDEX idx_tables_qr ON dining_tables(qr_token);
+  ALTER TABLE order_items ADD COLUMN source TEXT NOT NULL DEFAULT 'staff'
+    CHECK (source IN ('staff','guest'));
+  `,
 ];
 
 export function applySchema(db: Database): void {

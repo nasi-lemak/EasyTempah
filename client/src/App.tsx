@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { api } from './api';
 import { hasRole, useStore } from './store';
 import type { BusinessSettings, TaxSettings } from './types';
@@ -14,6 +14,8 @@ import MenuAdmin from './pages/MenuAdmin';
 import Inventory from './pages/Inventory';
 import Users from './pages/Users';
 import SettingsPage from './pages/Settings';
+import GuestOrder from './pages/GuestOrder';
+import TableQr from './pages/TableQr';
 
 function Sidebar() {
   const user = useStore((s) => s.user);
@@ -62,6 +64,7 @@ export default function App() {
   const token = useStore((s) => s.token);
   const user = useStore((s) => s.user);
   const setSettings = useStore((s) => s.setSettings);
+  const location = useLocation();
 
   useEffect(() => {
     if (!token) return;
@@ -72,6 +75,15 @@ export default function App() {
         /* 401 handled by api layer */
       });
   }, [token, setSettings]);
+
+  // Guest QR ordering is public and renders without the staff shell.
+  if (location.pathname.startsWith('/order/')) {
+    return (
+      <Routes>
+        <Route path="/order/:token" element={<GuestOrder />} />
+      </Routes>
+    );
+  }
 
   if (!token || !user) {
     return (
@@ -101,6 +113,7 @@ export default function App() {
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/users" element={<Users />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/table-qr" element={<TableQr />} />
           <Route path="*" element={<Navigate to={home} replace />} />
         </Routes>
       </main>

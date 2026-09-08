@@ -67,6 +67,7 @@ export interface DiningTable {
   pos_x: number | null; // percent (0-100) within the zone's floor canvas
   pos_y: number | null;
   shape: 'square' | 'round';
+  qr_token: string | null;
 }
 
 export interface Order {
@@ -113,6 +114,7 @@ export interface OrderItem {
   status: OrderItemStatus;
   station: Station;
   line_total_cents: number;
+  source: 'staff' | 'guest';
   sent_at: string | null;
   created_at: string;
 }

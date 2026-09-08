@@ -65,7 +65,10 @@ export default function Kds() {
                   <div key={line.id} className="kds-line">
                     <span className="qty">{line.qty}×</span>
                     <span className="grow">
-                      <div>{line.name} <span className={`badge ${line.status}`}>{line.status}</span></div>
+                      <div>
+                        {line.source === 'guest' && <span title="Ordered by guest via QR">📱 </span>}
+                        {line.name} <span className={`badge ${line.status}`}>{line.status}</span>
+                      </div>
                       {mods.length > 0 && <div className="mods">{mods.join(', ')}</div>}
                       {line.notes && <div className="note">» {line.notes}</div>}
                     </span>

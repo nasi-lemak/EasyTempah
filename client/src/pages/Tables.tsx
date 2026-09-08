@@ -114,6 +114,7 @@ export default function Tables() {
         <button className={view === 'grid' ? 'primary' : ''} onClick={() => setViewPersist('grid')}>
           Grid
         </button>
+        {hasRole(user, 'manager') && <button onClick={() => navigate('/table-qr')}>QR codes</button>}
         {view === 'floor' && hasRole(user, 'manager') && (
           editMode ? (
             <>

@@ -65,6 +65,7 @@ export interface DiningTable {
   pos_x: number | null;
   pos_y: number | null;
   shape: 'square' | 'round';
+  qr_token: string | null;
   order_id: number | null;
   order_no: string | null;
   total_cents: number | null;
@@ -93,6 +94,7 @@ export interface OrderItem {
   status: OrderItemStatus;
   station: Station;
   line_total_cents: number;
+  source: 'staff' | 'guest';
   sent_at: string | null;
   created_at: string;
 }

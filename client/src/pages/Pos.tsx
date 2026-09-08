@@ -225,7 +225,7 @@ export default function Pos() {
                 <div key={line.id} className="cart-line">
                   <div className="row">
                     <span className="grow">
-                      <strong>{line.qty}×</strong> {line.name}{' '}
+                      <strong>{line.qty}×</strong> {line.source === 'guest' && <span title="Ordered by guest via QR">📱</span>} {line.name}{' '}
                       {line.status !== 'pending' && <span className={`badge ${line.status}`}>{line.status}</span>}
                     </span>
                     <span className="mono">{money(line.line_total_cents)}</span>
