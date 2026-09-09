@@ -340,6 +340,43 @@ const MIGRATIONS: string[] = [
   ALTER TABLE order_items ADD COLUMN parent_line_id INTEGER REFERENCES order_items(id);
   CREATE INDEX idx_order_items_parent ON order_items(parent_line_id);
   `,
+  // v10 — recipe-level inventory: ingredients consumed by item/modifier recipes
+  `
+  CREATE TABLE ingredients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    unit TEXT NOT NULL DEFAULT 'g',
+    stock_qty REAL NOT NULL DEFAULT 0,
+    low_stock_threshold REAL NOT NULL DEFAULT 0,
+    cost_per_unit_cents REAL NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1
+  );
+
+  CREATE TABLE recipe_lines (
+    item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    ingredient_id INTEGER NOT NULL REFERENCES ingredients(id),
+    qty REAL NOT NULL CHECK (qty > 0),
+    PRIMARY KEY (item_id, ingredient_id)
+  );
+
+  CREATE TABLE modifier_recipe_lines (
+    modifier_id INTEGER NOT NULL REFERENCES modifiers(id) ON DELETE CASCADE,
+    ingredient_id INTEGER NOT NULL REFERENCES ingredients(id),
+    qty REAL NOT NULL CHECK (qty > 0),
+    PRIMARY KEY (modifier_id, ingredient_id)
+  );
+
+  CREATE TABLE ingredient_movements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ingredient_id INTEGER NOT NULL REFERENCES ingredients(id),
+    delta REAL NOT NULL,
+    reason TEXT NOT NULL,
+    ref TEXT,
+    user_id INTEGER REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX idx_ingredient_movements_ing ON ingredient_movements(ingredient_id);
+  `,
 ];
 
 export function applySchema(db: Database): void {

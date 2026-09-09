@@ -237,6 +237,16 @@ function insertLines(orderId: number, lines: AddLineInput[], opts: InsertOpts): 
       opts.status === 'sent' ? new Date().toISOString().replace('T', ' ').slice(0, 19) : null,
     );
     insertedIds.push(Number(info.lastInsertRowid));
+    if (opts.status === 'sent') {
+      applyLineIngredients(
+        item.id,
+        line.qty,
+        snapshots.map((s) => s.modifier_id).filter((id) => id > 0),
+        -1,
+        `order:${orderId}`,
+        opts.userId,
+      );
+    }
   }
   return insertedIds;
 }
@@ -304,6 +314,12 @@ function insertComboLine(orderId: number, item: Item, line: AddLineInput, opts: 
        VALUES (?, ?, ?, ?, 0, '[]', ?, ?, 0, ?, ?, ?, ?)`,
     ).run(orderId, c.component.id, c.component.name, line.qty, line.notes ?? null,
       c.component.station, opts.source, opts.status, sentAt, parentId);
+    if (opts.status === 'sent') {
+      applyLineIngredients(c.component.id, line.qty, [], -1, `order:${orderId}`, opts.userId);
+    }
+  }
+  if (opts.status === 'sent') {
+    applyLineIngredients(item.id, line.qty, [], -1, `order:${orderId}`, opts.userId);
   }
 }
 
@@ -448,7 +464,10 @@ export const cancelLine = db.transaction((orderId: number, lineId: number, userI
   if (line.status === 'cancelled') return;
   const wasSent = line.status !== 'pending';
   db.prepare("UPDATE order_items SET status = 'cancelled' WHERE id = ?").run(lineId);
-  if (wasSent && line.item_id) restock(line.item_id, line.qty, 'line_cancelled', `order:${orderId}`, userId);
+  if (wasSent && line.item_id) {
+    restock(line.item_id, line.qty, 'line_cancelled', `order:${orderId}`, userId);
+    applyLineIngredients(line.item_id, line.qty, modifierIdsFromSnapshot(line.modifiers_json), 1, `order:${orderId}`, userId);
+  }
   // Cascade to set-meal components, restocking each fired component.
   const children = db
     .prepare("SELECT * FROM order_items WHERE parent_line_id = ? AND status != 'cancelled'")
@@ -457,11 +476,59 @@ export const cancelLine = db.transaction((orderId: number, lineId: number, userI
     db.prepare("UPDATE order_items SET status = 'cancelled' WHERE id = ?").run(child.id);
     if (child.status !== 'pending' && child.item_id) {
       restock(child.item_id, child.qty, 'line_cancelled', `order:${orderId}`, userId);
+      applyLineIngredients(child.item_id, child.qty, [], 1, `order:${orderId}`, userId);
     }
   }
   recomputeTotals(orderId);
   audit(userId, 'order_line.cancel', { orderId, lineId, name: line.name, qty: line.qty, wasSent });
 });
+
+/**
+ * Consume (sign −1) or return (sign +1) the ingredients behind one fired line:
+ * the item's recipe plus the recipes of its chosen modifiers. Ingredient stock
+ * is informational — it may go negative (the kitchen doesn't stop cooking
+ * because the system says zero rice); low/negative levels surface in the
+ * back office. Item-level stock remains the hard sell-out enforcement.
+ */
+function applyLineIngredients(
+  itemId: number | null,
+  qty: number,
+  modifierIds: number[],
+  sign: 1 | -1,
+  ref: string,
+  userId: number | null,
+): void {
+  const uses: { ingredient_id: number; qty: number }[] = [];
+  if (itemId) {
+    uses.push(
+      ...(db
+        .prepare('SELECT ingredient_id, qty FROM recipe_lines WHERE item_id = ?')
+        .all(itemId) as { ingredient_id: number; qty: number }[]),
+    );
+  }
+  for (const modId of modifierIds) {
+    uses.push(
+      ...(db
+        .prepare('SELECT ingredient_id, qty FROM modifier_recipe_lines WHERE modifier_id = ?')
+        .all(modId) as { ingredient_id: number; qty: number }[]),
+    );
+  }
+  const update = db.prepare('UPDATE ingredients SET stock_qty = stock_qty + ? WHERE id = ?');
+  const log = db.prepare(
+    'INSERT INTO ingredient_movements (ingredient_id, delta, reason, ref, user_id) VALUES (?, ?, ?, ?, ?)',
+  );
+  for (const use of uses) {
+    const delta = sign * use.qty * qty;
+    update.run(delta, use.ingredient_id);
+    log.run(use.ingredient_id, delta, sign < 0 ? 'sale' : 'returned', ref, userId);
+  }
+}
+
+function modifierIdsFromSnapshot(modifiersJson: string): number[] {
+  return (JSON.parse(modifiersJson) as OrderItemModifierSnapshot[])
+    .map((m) => m.modifier_id)
+    .filter((id) => id > 0); // combo-choice snapshots use id 0
+}
 
 function restock(itemId: number, qty: number, reason: string, ref: string, userId: number | null): void {
   const item = db.prepare('SELECT track_stock FROM items WHERE id = ?').get(itemId) as
@@ -484,6 +551,14 @@ export const sendToKitchen = db.transaction((orderId: number, userId: number): n
 
   for (const line of pending) {
     if (!line.item_id) continue;
+    applyLineIngredients(
+      line.item_id,
+      line.qty,
+      modifierIdsFromSnapshot(line.modifiers_json),
+      -1,
+      `order:${orderId}`,
+      userId,
+    );
     const item = db
       .prepare('SELECT track_stock, stock_qty, name FROM items WHERE id = ?')
       .get(line.item_id) as { track_stock: number; stock_qty: number; name: string };
@@ -642,7 +717,10 @@ export const voidOrder = db.transaction((orderId: number, reason: string, userId
     .prepare("SELECT * FROM order_items WHERE order_id = ? AND status NOT IN ('pending','cancelled')")
     .all(orderId) as OrderItem[];
   for (const line of sentLines) {
-    if (line.item_id) restock(line.item_id, line.qty, 'order_void', `order:${orderId}`, userId);
+    if (line.item_id) {
+      restock(line.item_id, line.qty, 'order_void', `order:${orderId}`, userId);
+      applyLineIngredients(line.item_id, line.qty, modifierIdsFromSnapshot(line.modifiers_json), 1, `order:${orderId}`, userId);
+    }
   }
   db.prepare(
     `UPDATE orders SET status = 'void', void_reason = ?, closed_at = datetime('now') WHERE id = ?`,

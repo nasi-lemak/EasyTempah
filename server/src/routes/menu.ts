@@ -40,8 +40,48 @@ menuRouter.get('/admin', requireRole('manager'), (_req, res) => {
     links: db.prepare('SELECT * FROM item_modifier_groups').all(),
     comboGroups: db.prepare('SELECT * FROM combo_groups ORDER BY sort, id').all(),
     comboItems: db.prepare('SELECT * FROM combo_group_items').all(),
+    ingredients: db.prepare('SELECT * FROM ingredients WHERE active = 1 ORDER BY name').all(),
+    recipeLines: db.prepare('SELECT * FROM recipe_lines').all(),
+    modifierRecipeLines: db.prepare('SELECT * FROM modifier_recipe_lines').all(),
   });
 });
+
+/** Replace an item's ingredient recipe wholesale. */
+menuRouter.put('/items/:id/recipe', requireRole('manager'), (req, res) => {
+  const item = db.prepare('SELECT id FROM items WHERE id = ?').get(req.params.id);
+  if (!item) throw notFound();
+  saveRecipe('recipe_lines', 'item_id', Number(req.params.id), req.body as { lines?: RecipeInput[] });
+  publish('menu');
+  res.json({ ok: true });
+});
+
+menuRouter.put('/modifiers/:id/recipe', requireRole('manager'), (req, res) => {
+  const mod = db.prepare('SELECT id FROM modifiers WHERE id = ?').get(req.params.id);
+  if (!mod) throw notFound();
+  saveRecipe('modifier_recipe_lines', 'modifier_id', Number(req.params.id), req.body as { lines?: RecipeInput[] });
+  publish('menu');
+  res.json({ ok: true });
+});
+
+interface RecipeInput {
+  ingredient_id: number;
+  qty: number;
+}
+
+const saveRecipe = db.transaction(
+  (table: 'recipe_lines' | 'modifier_recipe_lines', ownerCol: string, ownerId: number, body: { lines?: RecipeInput[] }): void => {
+    if (!Array.isArray(body.lines)) throw badRequest('lines[] required');
+    db.prepare(`DELETE FROM ${table} WHERE ${ownerCol} = ?`).run(ownerId);
+    for (const line of body.lines) {
+      if (typeof line.qty !== 'number' || line.qty <= 0) throw badRequest('Recipe quantities must be positive');
+      const ing = db.prepare('SELECT id FROM ingredients WHERE id = ?').get(line.ingredient_id);
+      if (!ing) throw badRequest('Ingredient not found');
+      db.prepare(
+        `INSERT OR REPLACE INTO ${table} (${ownerCol}, ingredient_id, qty) VALUES (?, ?, ?)`,
+      ).run(ownerId, line.ingredient_id, line.qty);
+    }
+  },
+);
 
 /** Replace a combo item's choice groups wholesale (simplest correct admin semantics). */
 const saveCombo = db.transaction(

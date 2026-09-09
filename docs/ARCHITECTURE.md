@@ -100,6 +100,15 @@ configurable.
   as float + cash sales − refunds + paid-ins − paid-outs.
 - **stock_movements** — audit trail for every stock change (sale, void
   restock, manual adjustment, received stock).
+- **ingredients → recipe_lines / modifier_recipe_lines** — recipe-level
+  inventory: ingredients in real units (g/ml/pcs) with per-unit cost, consumed
+  automatically when a line fires — the item's recipe plus the recipes of its
+  chosen add-ons, and set-meal components through their own recipes — and
+  returned on cancels and voids, all logged in `ingredient_movements`.
+  Ingredient stock is deliberately allowed to go negative: it flags a counting
+  gap in the back office instead of blocking the kitchen, while item-level
+  stock remains the hard sold-out enforcement. Recipes are edited in the menu
+  admin, which also surfaces the computed food cost per item.
 - **audit_log** — who did what, when (voids, price overrides, shift events).
 
 ## Order lifecycle

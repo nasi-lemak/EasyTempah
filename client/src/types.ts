@@ -33,6 +33,28 @@ export interface Item {
   is_combo: number;
 }
 
+export interface Ingredient {
+  id: number;
+  name: string;
+  unit: string;
+  stock_qty: number;
+  low_stock_threshold: number;
+  cost_per_unit_cents: number;
+  active: number;
+}
+
+export interface RecipeLine {
+  item_id: number;
+  ingredient_id: number;
+  qty: number;
+}
+
+export interface ModifierRecipeLine {
+  modifier_id: number;
+  ingredient_id: number;
+  qty: number;
+}
+
 export interface ComboGroup {
   id: number;
   item_id: number;

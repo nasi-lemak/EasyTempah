@@ -120,6 +120,28 @@ const seed = db.transaction(() => {
   insertComboItem.run(gDrink, 16, 0); // Kopi O
   insertComboItem.run(gDrink, 17, 150); // Milo Dinosaur +RM1.50
 
+  // Ingredients + a few demo recipes (consumed automatically when lines fire)
+  const insertIng = db.prepare(
+    'INSERT INTO ingredients (name, unit, stock_qty, low_stock_threshold, cost_per_unit_cents) VALUES (?, ?, ?, ?, ?)',
+  );
+  const iRice = Number(insertIng.run('Rice', 'g', 20000, 3000, 0.6).lastInsertRowid);
+  const iSantan = Number(insertIng.run('Coconut milk', 'ml', 5000, 1000, 1.2).lastInsertRowid);
+  const iEgg = Number(insertIng.run('Eggs', 'pcs', 120, 24, 45).lastInsertRowid);
+  const iChicken = Number(insertIng.run('Chicken', 'g', 8000, 1500, 1.8).lastInsertRowid);
+  const iTea = Number(insertIng.run('Tea leaves', 'g', 1000, 200, 3).lastInsertRowid);
+  const iCondensed = Number(insertIng.run('Condensed milk', 'ml', 3000, 500, 0.9).lastInsertRowid);
+  const insertRecipe = db.prepare('INSERT INTO recipe_lines (item_id, ingredient_id, qty) VALUES (?, ?, ?)');
+  insertRecipe.run(1, iRice, 180); // Nasi Lemak Biasa
+  insertRecipe.run(1, iSantan, 60);
+  insertRecipe.run(1, iEgg, 1);
+  insertRecipe.run(15, iTea, 8); // Teh Tarik
+  insertRecipe.run(15, iCondensed, 30);
+  const insertModRecipe = db.prepare(
+    'INSERT INTO modifier_recipe_lines (modifier_id, ingredient_id, qty) VALUES (?, ?, ?)',
+  );
+  insertModRecipe.run(1, iEgg, 1); // Fried Egg add-on
+  insertModRecipe.run(2, iChicken, 150); // Ayam Goreng add-on
+
   // Tables, laid out on the floor plan (pos_x/pos_y are % of the zone canvas)
   const insertTable = db.prepare(
     'INSERT INTO dining_tables (name, zone, seats, pos_x, pos_y, shape, qr_token) VALUES (?, ?, ?, ?, ?, ?, ?)',

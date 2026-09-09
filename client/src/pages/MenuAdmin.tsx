@@ -2,7 +2,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import Modal from '../components/Modal';
 import { useMoney } from '../store';
-import type { Category, ComboGroup, ComboGroupItem, Item, Modifier, ModifierGroup } from '../types';
+import type {
+  Category,
+  ComboGroup,
+  ComboGroupItem,
+  Ingredient,
+  Item,
+  Modifier,
+  ModifierGroup,
+  ModifierRecipeLine,
+  RecipeLine,
+} from '../types';
 
 interface AdminMenu {
   categories: Category[];
@@ -12,6 +22,71 @@ interface AdminMenu {
   links: { item_id: number; group_id: number }[];
   comboGroups: ComboGroup[];
   comboItems: ComboGroupItem[];
+  ingredients: Ingredient[];
+  recipeLines: RecipeLine[];
+  modifierRecipeLines: ModifierRecipeLine[];
+}
+
+interface RecipeForm {
+  ingredient_id: number;
+  qty: number;
+}
+
+/** Shared recipe rows editor (items and modifiers). */
+function RecipeEditor({
+  ingredients,
+  lines,
+  onChange,
+}: {
+  ingredients: Ingredient[];
+  lines: RecipeForm[];
+  onChange: (lines: RecipeForm[]) => void;
+}) {
+  const cost = lines.reduce((sum, l) => {
+    const ing = ingredients.find((i) => i.id === l.ingredient_id);
+    return sum + (ing?.cost_per_unit_cents ?? 0) * l.qty;
+  }, 0);
+  return (
+    <div className="panel mb" style={{ padding: '0.6rem' }}>
+      {lines.map((l, i) => {
+        const ing = ingredients.find((x) => x.id === l.ingredient_id);
+        return (
+          <div key={l.ingredient_id} className="row" style={{ marginBottom: '0.3rem' }}>
+            <span className="grow small">{ing?.name}</span>
+            <input
+              inputMode="decimal"
+              style={{ width: 80 }}
+              value={String(l.qty)}
+              onChange={(e) => {
+                const next = lines.slice();
+                next[i] = { ...l, qty: Number(e.target.value) || 0 };
+                onChange(next);
+              }}
+            />
+            <span className="muted small" style={{ width: 30 }}>{ing?.unit}</span>
+            <button className="ghost small" onClick={() => onChange(lines.filter((_, x) => x !== i))}>✕</button>
+          </div>
+        );
+      })}
+      <div className="row">
+        <select
+          value=""
+          onChange={(e) => {
+            const id = Number(e.target.value);
+            if (!id || lines.some((l) => l.ingredient_id === id)) return;
+            onChange([...lines, { ingredient_id: id, qty: 1 }]);
+          }}
+        >
+          <option value="">+ add ingredient…</option>
+          {ingredients.map((i) => (
+            <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>
+          ))}
+        </select>
+        <div className="grow" />
+        {cost > 0 && <span className="muted small">Food cost ≈ RM {(cost / 100).toFixed(2)}</span>}
+      </div>
+    </div>
+  );
 }
 
 interface ComboGroupForm {
@@ -35,6 +110,8 @@ export default function MenuAdmin() {
   const [tab, setTab] = useState<'items' | 'categories' | 'modifiers'>('items');
   const [itemForm, setItemForm] = useState<typeof emptyItemForm | null>(null);
   const [comboForm, setComboForm] = useState<ComboGroupForm[]>([]);
+  const [recipeForm, setRecipeForm] = useState<RecipeForm[]>([]);
+  const [modRecipe, setModRecipe] = useState<{ modifier: Modifier; lines: RecipeForm[] } | null>(null);
   const [catName, setCatName] = useState('');
   const [groupForm, setGroupForm] = useState({ name: '', min: 0, max: 0 });
   const [modForm, setModForm] = useState({ group_id: 0, name: '', price: '' });
@@ -76,6 +153,9 @@ export default function MenuAdmin() {
         itemId = r.id;
       }
       await api.put(`/api/menu/items/${itemId}/combo`, { groups: comboForm });
+      await api.put(`/api/menu/items/${itemId}/recipe`, {
+        lines: recipeForm.filter((l) => l.qty > 0),
+      });
       setItemForm(null);
     });
 
@@ -99,6 +179,11 @@ export default function MenuAdmin() {
             .map((ci) => ({ item_id: ci.item_id, surcharge_cents: ci.surcharge_cents })),
         })),
     );
+    setRecipeForm(
+      menu.recipeLines
+        .filter((r) => r.item_id === item.id)
+        .map((r) => ({ ingredient_id: r.ingredient_id, qty: r.qty })),
+    );
   };
 
   return (
@@ -120,6 +205,7 @@ export default function MenuAdmin() {
             onClick={() => {
               setItemForm({ ...emptyItemForm, category_id: menu.categories[0]?.id ?? 0 });
               setComboForm([]);
+              setRecipeForm([]);
             }}
           >
             + New item
@@ -206,14 +292,29 @@ export default function MenuAdmin() {
                 <h3>{g.name} <span className="muted small">min {g.min_select} / max {g.max_select || '∞'}</span></h3>
                 <div className="row wrap">
                   {menu.modifiers.filter((m) => m.group_id === g.id).map((m) => (
-                    <button
-                      key={m.id}
-                      className={m.active ? '' : 'ghost'}
-                      title="Toggle active"
-                      onClick={() => run(() => api.patch(`/api/menu/modifiers/${m.id}`, { active: !m.active }))}
-                    >
-                      {m.name}{m.price_delta_cents ? ` +${money(m.price_delta_cents)}` : ''}{m.active ? '' : ' (off)'}
-                    </button>
+                    <span key={m.id} className="row" style={{ gap: '0.15rem' }}>
+                      <button
+                        className={m.active ? '' : 'ghost'}
+                        title="Toggle active"
+                        onClick={() => run(() => api.patch(`/api/menu/modifiers/${m.id}`, { active: !m.active }))}
+                      >
+                        {m.name}{m.price_delta_cents ? ` +${money(m.price_delta_cents)}` : ''}{m.active ? '' : ' (off)'}
+                      </button>
+                      <button
+                        className="ghost small"
+                        title="Edit ingredient recipe"
+                        onClick={() =>
+                          setModRecipe({
+                            modifier: m,
+                            lines: menu.modifierRecipeLines
+                              .filter((r) => r.modifier_id === m.id)
+                              .map((r) => ({ ingredient_id: r.ingredient_id, qty: r.qty })),
+                          })
+                        }
+                      >
+                        🧾
+                      </button>
+                    </span>
                   ))}
                 </div>
               </div>
@@ -279,6 +380,9 @@ export default function MenuAdmin() {
               );
             })}
           </div>
+          <label>Recipe — ingredients consumed per unit sold (optional)</label>
+          <RecipeEditor ingredients={menu.ingredients} lines={recipeForm} onChange={setRecipeForm} />
+
           <label>Set meal (combo) — choice groups</label>
           {comboForm.map((g, gi) => (
             <div key={gi} className="panel mb" style={{ padding: '0.6rem' }}>
@@ -352,6 +456,30 @@ export default function MenuAdmin() {
 
           <button className="primary" onClick={saveItem}>Save</button>
           {error && <div className="error-text mt">{error}</div>}
+        </Modal>
+      )}
+
+      {modRecipe && (
+        <Modal title={`Recipe — ${modRecipe.modifier.name}`} onClose={() => setModRecipe(null)}>
+          <p className="muted small">Ingredients consumed each time this add-on is chosen.</p>
+          <RecipeEditor
+            ingredients={menu.ingredients}
+            lines={modRecipe.lines}
+            onChange={(lines) => setModRecipe({ ...modRecipe, lines })}
+          />
+          <button
+            className="primary"
+            onClick={() =>
+              run(async () => {
+                await api.put(`/api/menu/modifiers/${modRecipe.modifier.id}/recipe`, {
+                  lines: modRecipe.lines.filter((l) => l.qty > 0),
+                });
+                setModRecipe(null);
+              })
+            }
+          >
+            Save recipe
+          </button>
         </Modal>
       )}
     </div>

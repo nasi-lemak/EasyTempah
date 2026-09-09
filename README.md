@@ -36,6 +36,7 @@ kitchen displays and the back office, all over the local network.
 - Sales reports: summary KPIs, hourly chart, top items, payment mix, order-type split
 - Menu management (categories, items, modifier groups) without restarts — changes push live to terminals
 - Inventory: per-item stock tracking, automatic deduction on kitchen send, restock on void/cancel, adjustment audit trail, low-stock badges and sold-out lockout on the POS
+- Recipe-level inventory: ingredients (g/ml/pcs) with recipes on menu items and add-ons; firing a line consumes its ingredients automatically (set-meal components included), cancels and voids return them, and the back office tracks receiving, stocktakes, movement history and per-item food cost. Ingredient stock can go negative to flag counting gaps without blocking the kitchen
 - Users & roles (admin / manager / cashier / kitchen) with PIN sign-in
 - Business settings: identity, receipt footer, tax, service charge (per-order-type — dine-in only by default per MY/SG convention, fully toggleable), cash rounding, and one-click country presets (🇲🇾 RM/SST 6%, 🇸🇬 S$/GST 9%) — every value stays individually editable for other markets
 - Hardening & ops: PIN brute-force lockout (5 failures → 5-minute IP lock), manager-gated per-line price overrides, and automatic daily SQLite backups (14 kept) with a back-up-now button
