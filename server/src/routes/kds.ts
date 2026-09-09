@@ -56,6 +56,42 @@ const BUMP_FLOW: Record<string, OrderItemStatus> = {
   ready: 'served',
 };
 
+const UNBUMP_FLOW: Record<string, OrderItemStatus> = {
+  served: 'ready',
+  ready: 'preparing',
+  preparing: 'sent',
+};
+
+/** Recently served lines of still-open orders — the "oops, bumped too early" recall list. */
+kdsRouter.get('/recent', (_req, res) => {
+  const lines = db
+    .prepare(
+      `SELECT oi.*, o.order_no, o.type, t.name AS table_name
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       LEFT JOIN dining_tables t ON t.id = o.table_id
+       WHERE o.status = 'open' AND oi.status = 'served'
+         AND NOT EXISTS (SELECT 1 FROM order_items c WHERE c.parent_line_id = oi.id)
+       ORDER BY oi.id DESC LIMIT 20`,
+    )
+    .all();
+  res.json({ lines });
+});
+
+/** Step a line backwards one stage (served→ready→preparing→sent). */
+kdsRouter.post('/lines/:lineId/unbump', (req: AuthedRequest, res) => {
+  const line = db.prepare('SELECT * FROM order_items WHERE id = ?').get(req.params.lineId) as
+    | { id: number; status: string }
+    | undefined;
+  if (!line) throw notFound('Line not found');
+  const target = UNBUMP_FLOW[line.status];
+  if (!target) throw badRequest(`Cannot recall a line in status "${line.status}"`);
+  db.prepare('UPDATE order_items SET status = ? WHERE id = ?').run(target, line.id);
+  publish('kds');
+  publish('orders');
+  res.json({ ok: true, status: target });
+});
+
 kdsRouter.post('/lines/:lineId/bump', (req: AuthedRequest, res) => {
   const line = db.prepare('SELECT * FROM order_items WHERE id = ?').get(req.params.lineId) as
     | { id: number; status: string }

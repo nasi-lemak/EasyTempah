@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
-import type { KdsTicket, Station } from '../types';
+import type { KdsLine, KdsTicket, Station } from '../types';
 import { minutesSince } from '../time';
 import { useEvents } from '../useEvents';
 
@@ -10,17 +10,27 @@ const NEXT_LABEL: Record<string, string> = {
   ready: 'Serve',
 };
 
+interface RecentLine extends KdsLine {
+  order_no: string;
+  table_name: string | null;
+}
+
 export default function Kds() {
   const [tickets, setTickets] = useState<KdsTicket[]>([]);
   const [station, setStation] = useState<Station | 'all'>('all');
+  const [showRecall, setShowRecall] = useState(false);
+  const [recent, setRecent] = useState<RecentLine[]>([]);
   const [, forceTick] = useState(0);
 
   const load = useCallback(() => {
     const q = station === 'all' ? '' : `?station=${station}`;
     api.get<{ tickets: KdsTicket[] }>(`/api/kds/tickets${q}`).then((r) => setTickets(r.tickets)).catch(() => {});
+    api.get<{ lines: RecentLine[] }>('/api/kds/recent').then((r) => setRecent(r.lines)).catch(() => {});
   }, [station]);
   useEffect(load, [load]);
   useEvents(['kds'], load);
+
+  const unbump = (lineId: number) => api.post(`/api/kds/lines/${lineId}/unbump`).then(load).catch(() => {});
 
   // Re-render every 30s so ticket ages stay fresh.
   useEffect(() => {
@@ -42,7 +52,26 @@ export default function Kds() {
             {s === 'all' ? 'All stations' : s[0].toUpperCase() + s.slice(1)}
           </button>
         ))}
+        <button className={showRecall ? 'primary' : ''} onClick={() => setShowRecall(!showRecall)}>
+          Recall{recent.length > 0 ? ` (${recent.length})` : ''}
+        </button>
       </div>
+
+      {showRecall && (
+        <div className="panel mb">
+          <h2>Recently served — recall to bring a ticket back</h2>
+          {recent.length === 0 && <div className="muted">Nothing served recently on open orders.</div>}
+          {recent.map((line) => (
+            <div key={line.id} className="row" style={{ padding: '0.3rem 0', borderBottom: '1px solid var(--border)' }}>
+              <span className="grow">
+                <strong>{line.qty}×</strong> {line.name}
+                <span className="muted small"> · {line.table_name ? `Table ${line.table_name}` : line.type.replace('_', ' ')} · #{line.order_no.slice(-4)}</span>
+              </span>
+              <button onClick={() => unbump(line.id)}>Recall → ready</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {tickets.length === 0 && <div className="muted">No open tickets. 🎉</div>}
 

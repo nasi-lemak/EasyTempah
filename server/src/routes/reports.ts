@@ -129,6 +129,106 @@ reportsRouter.get('/hourly', (req, res) => {
   res.json({ from, to, hours: rows });
 });
 
+/** Sales attribution per staff member: orders opened, payments taken, refunds given. */
+reportsRouter.get('/cashiers', (req, res) => {
+  const { from, to } = dateRange(req);
+  const rows = db
+    .prepare(
+      `SELECT u.id, u.name,
+        (SELECT COUNT(*) FROM orders o WHERE o.opened_by = u.id AND ${PAID_IN_RANGE.replace(/o\./g, 'o.')}) AS orders_opened,
+        (SELECT COUNT(*) FROM payments p JOIN orders o ON o.id = p.order_id
+          WHERE p.user_id = u.id AND ${PAID_IN_RANGE}) AS payments_taken,
+        (SELECT COALESCE(SUM(p.amount_cents), 0) FROM payments p JOIN orders o ON o.id = p.order_id
+          WHERE p.user_id = u.id AND ${PAID_IN_RANGE}) AS collected_cents,
+        (SELECT COALESCE(SUM(r.amount_cents), 0) FROM refunds r
+          WHERE r.user_id = u.id AND date(r.created_at, 'localtime') BETWEEN ? AND ?) AS refunded_cents
+       FROM users u
+       ORDER BY collected_cents DESC`,
+    )
+    .all(from, to, from, to, from, to, from, to) as {
+    id: number;
+    name: string;
+    orders_opened: number;
+    payments_taken: number;
+    collected_cents: number;
+    refunded_cents: number;
+  }[];
+  res.json({ from, to, cashiers: rows.filter((r) => r.orders_opened || r.payments_taken || r.refunded_cents) });
+});
+
+// ---- CSV exports (for the accountant) ----
+
+function csv(rows: (string | number | null | undefined)[][]): string {
+  return rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          const s = cell === null || cell === undefined ? '' : String(cell);
+          return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        })
+        .join(','),
+    )
+    .join('\r\n');
+}
+
+const rm = (cents: number | null) => ((cents ?? 0) / 100).toFixed(2);
+
+reportsRouter.get('/export', (req, res) => {
+  const { from, to } = dateRange(req);
+  const kind = typeof req.query.type === 'string' ? req.query.type : 'orders';
+  let rows: (string | number | null)[][];
+  if (kind === 'orders') {
+    const data = db
+      .prepare(
+        `SELECT o.*, t.name AS table_name, u.name AS opened_by_name,
+          (SELECT GROUP_CONCAT(COALESCE(p.channel, p.method), ' + ') FROM payments p WHERE p.order_id = o.id) AS channels
+         FROM orders o
+         LEFT JOIN dining_tables t ON t.id = o.table_id
+         LEFT JOIN users u ON u.id = o.opened_by
+         WHERE o.status IN ('paid','void') AND date(COALESCE(o.closed_at, o.opened_at), 'localtime') BETWEEN ? AND ?
+         ORDER BY o.id`,
+      )
+      .all(from, to) as (Record<string, string | number | null>)[];
+    rows = [
+      ['Order No', 'Opened', 'Closed', 'Type', 'Platform', 'Table', 'Status', 'Subtotal (RM)', 'Discount (RM)',
+        'Service (RM)', 'Tax (RM)', 'Rounding (RM)', 'Total (RM)', 'Refunded (RM)', 'Payment Channels', 'Opened By'],
+      ...data.map((o) => [
+        o.order_no, o.opened_at, o.closed_at, o.type, o.platform, o.table_name, o.status,
+        rm(o.subtotal_cents as number), rm(o.discount_cents as number), rm(o.service_cents as number),
+        rm(o.tax_cents as number), rm(o.rounding_cents as number), rm(o.total_cents as number),
+        rm(o.refunded_cents as number), o.channels, o.opened_by_name,
+      ]),
+    ];
+  } else if (kind === 'items') {
+    const data = db
+      .prepare(
+        `SELECT oi.name, SUM(oi.qty) AS qty, SUM(oi.line_total_cents) AS total_cents
+         FROM order_items oi JOIN orders o ON o.id = oi.order_id
+         WHERE ${PAID_IN_RANGE} AND oi.status != 'cancelled'
+         GROUP BY oi.name ORDER BY total_cents DESC`,
+      )
+      .all(from, to) as { name: string; qty: number; total_cents: number }[];
+    rows = [['Item', 'Qty Sold', 'Revenue (RM)'], ...data.map((i) => [i.name, i.qty, rm(i.total_cents)])];
+  } else if (kind === 'payments') {
+    const data = db
+      .prepare(
+        `SELECT p.created_at, o.order_no, COALESCE(p.channel, p.method) AS channel, p.amount_cents, p.reference, u.name AS cashier
+         FROM payments p JOIN orders o ON o.id = p.order_id JOIN users u ON u.id = p.user_id
+         WHERE date(p.created_at, 'localtime') BETWEEN ? AND ? ORDER BY p.id`,
+      )
+      .all(from, to) as (Record<string, string | number | null>)[];
+    rows = [
+      ['When', 'Order No', 'Channel', 'Amount (RM)', 'Reference', 'Cashier'],
+      ...data.map((p) => [p.created_at, p.order_no, p.channel, rm(p.amount_cents as number), p.reference, p.cashier]),
+    ];
+  } else {
+    throw badRequest('type must be orders, items or payments');
+  }
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="easytempah-${kind}-${from}-to-${to}.csv"`);
+  res.send('﻿' + csv(rows)); // BOM so Excel opens UTF-8 correctly
+});
+
 reportsRouter.get('/daily', (req, res) => {
   const { from, to } = dateRange(req);
   const rows = db

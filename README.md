@@ -25,7 +25,7 @@ kitchen displays and the back office, all over the local network.
 **Kitchen**
 - Real-time Kitchen Display System with per-station routing (kitchen / bar)
 - Ticket aging with color thresholds, per-line and whole-ticket bumping
-  (`sent → preparing → ready → served`)
+  (`sent → preparing → ready → served`), and a recall list to un-bump recently served lines
 
 **Cash control**
 - Shift sessions with opening float, paid-in/paid-out movements
@@ -33,7 +33,7 @@ kitchen displays and the back office, all over the local network.
   reconciliation with variance tracking
 
 **Back office**
-- Sales reports: summary KPIs, hourly chart, top items, payment mix, order-type split
+- Sales reports: summary KPIs, hourly chart, top items, payment mix, order-type split, per-staff attribution (orders opened, collected, refunds given — also on the live shift X-report), and one-click CSV exports (orders / items / payments) for the accountant
 - Menu management (categories, items, modifier groups) without restarts — changes push live to terminals
 - Inventory: per-item stock tracking, automatic deduction on kitchen send, restock on void/cancel, adjustment audit trail, low-stock badges and sold-out lockout on the POS
 - Recipe-level inventory: ingredients (g/ml/pcs) with recipes on menu items and add-ons; firing a line consumes its ingredients automatically (set-meal components included), cancels and voids return them, and the back office tracks receiving, stocktakes, movement history and per-item food cost. Ingredient stock can go negative to flag counting gaps without blocking the kitchen

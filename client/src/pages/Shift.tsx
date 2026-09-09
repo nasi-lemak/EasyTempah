@@ -142,6 +142,23 @@ export default function ShiftPage() {
         </div>
       )}
 
+      {summary && summary.by_cashier.length > 1 && (
+        <div className="panel mb" style={{ maxWidth: 480 }}>
+          <h2>By cashier</h2>
+          <table className="data">
+            <tbody>
+              {summary.by_cashier.map((c) => (
+                <tr key={c.name}>
+                  <td>{c.name}</td>
+                  <td className="num">{c.payments}×</td>
+                  <td className="num">{money(c.amount_cents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {summary && summary.by_channel.length > 0 && (
         <div className="panel mb" style={{ maxWidth: 480 }}>
           <h2>By payment channel</h2>

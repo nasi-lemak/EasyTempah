@@ -346,6 +346,7 @@ export interface ShiftSummary {
   cash_refunds_cents: number;
   expected_cash_cents: number;
   by_channel: { channel: string; payments: number; amount_cents: number }[];
+  by_cashier: { name: string; payments: number; amount_cents: number }[];
 }
 
 export interface KdsLine extends OrderItem {

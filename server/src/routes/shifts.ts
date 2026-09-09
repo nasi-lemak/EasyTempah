@@ -28,6 +28,7 @@ interface ShiftSummary {
   cash_refunds_cents: number;
   expected_cash_cents: number;
   by_channel: { channel: string; payments: number; amount_cents: number }[];
+  by_cashier: { name: string; payments: number; amount_cents: number }[];
 }
 
 function summarize(shift: Shift): ShiftSummary {
@@ -65,8 +66,16 @@ function summarize(shift: Shift): ShiftSummary {
        FROM payments WHERE shift_id = ? GROUP BY COALESCE(channel, method) ORDER BY amount_cents DESC`,
     )
     .all(shift.id) as { channel: string; payments: number; amount_cents: number }[];
+  const byCashier = db
+    .prepare(
+      `SELECT u.name, COUNT(*) AS payments, SUM(p.amount_cents) AS amount_cents
+       FROM payments p JOIN users u ON u.id = p.user_id
+       WHERE p.shift_id = ? GROUP BY p.user_id ORDER BY amount_cents DESC`,
+    )
+    .all(shift.id) as { name: string; payments: number; amount_cents: number }[];
   return {
     by_channel: byChannel,
+    by_cashier: byCashier,
     cash_sales_cents: cash,
     card_sales_cents: card,
     ewallet_sales_cents: ewallet,

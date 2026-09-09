@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
-import { useMoney } from '../store';
+import { useMoney, useStore } from '../store';
 
 interface Summary {
   orders: number;
@@ -29,6 +29,14 @@ interface Summary {
 interface ItemRow { name: string; qty: number; total_cents: number }
 interface PaymentRow { method: string; payments: number; total_cents: number }
 interface HourRow { hour: string; orders: number; total_cents: number }
+interface CashierRow {
+  id: number;
+  name: string;
+  orders_opened: number;
+  payments_taken: number;
+  collected_cents: number;
+  refunded_cents: number;
+}
 
 export default function Reports() {
   const money = useMoney();
@@ -39,7 +47,9 @@ export default function Reports() {
   const [items, setItems] = useState<ItemRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [hours, setHours] = useState<HourRow[]>([]);
+  const [cashiers, setCashiers] = useState<CashierRow[]>([]);
   const [error, setError] = useState('');
+  const token = useStore((s) => s.token);
 
   const load = useCallback(() => {
     const q = `?from=${from}&to=${to}`;
@@ -49,16 +59,37 @@ export default function Reports() {
       api.get<{ items: ItemRow[] }>(`/api/reports/items${q}`),
       api.get<{ payments: PaymentRow[] }>(`/api/reports/payments${q}`),
       api.get<{ hours: HourRow[] }>(`/api/reports/hourly${q}`),
+      api.get<{ cashiers: CashierRow[] }>(`/api/reports/cashiers${q}`),
     ])
-      .then(([s, i, p, h]) => {
+      .then(([s, i, p, h, c]) => {
         setSummary(s);
         setItems(i.items);
         setPayments(p.payments);
         setHours(h.hours);
+        setCashiers(c.cashiers);
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load reports'));
   }, [from, to]);
   useEffect(load, [load]);
+
+  const exportCsv = async (type: 'orders' | 'items' | 'payments') => {
+    setError('');
+    try {
+      const res = await fetch(`/api/reports/export?type=${type}&from=${from}&to=${to}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `easytempah-${type}-${from}-to-${to}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Export failed');
+    }
+  };
 
   const maxHour = Math.max(1, ...hours.map((h) => h.total_cents));
 
@@ -70,6 +101,9 @@ export default function Reports() {
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         <label style={{ margin: 0 }}>To</label>
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        <button onClick={() => exportCsv('orders')}>⬇ Orders CSV</button>
+        <button onClick={() => exportCsv('items')}>⬇ Items CSV</button>
+        <button onClick={() => exportCsv('payments')}>⬇ Payments CSV</button>
       </div>
       {error && <div className="error-text mb">{error}</div>}
 
@@ -137,6 +171,33 @@ export default function Reports() {
           )}
         </div>
       </div>
+
+      {cashiers.length > 0 && (
+        <div className="panel mt">
+          <h2>By staff member</h2>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Staff</th><th className="num">Orders opened</th><th className="num">Payments taken</th>
+                <th className="num">Collected</th><th className="num">Refunds given</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cashiers.map((c) => (
+                <tr key={c.id}>
+                  <td>{c.name}</td>
+                  <td className="num">{c.orders_opened}</td>
+                  <td className="num">{c.payments_taken}</td>
+                  <td className="num">{money(c.collected_cents)}</td>
+                  <td className="num" style={{ color: c.refunded_cents ? 'var(--danger)' : undefined }}>
+                    {c.refunded_cents ? money(c.refunded_cents) : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {summary && summary.by_platform.length > 0 && (
         <div className="panel mt">
