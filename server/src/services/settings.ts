@@ -3,6 +3,7 @@ import type {
   BusinessSettings,
   EinvoiceSettings,
   GatewaySettings,
+  LoyaltySettings,
   PaymentsSettings,
   PlatformsSettings,
   PrintersSettings,
@@ -119,6 +120,17 @@ export function getPlatformsSettings(): PlatformsSettings {
   const stored = getSetting('platforms', DEFAULT_PLATFORMS);
   if (!Array.isArray(stored.platforms)) return DEFAULT_PLATFORMS;
   return stored;
+}
+
+export const DEFAULT_LOYALTY: LoyaltySettings = {
+  enabled: false,
+  earnPointsPerRm: 1,
+  redeemPointsPerRm: 100, // 100 points = RM1 (1 point = 1 sen)
+  minRedeemPoints: 100,
+};
+
+export function getLoyaltySettings(): LoyaltySettings {
+  return getSetting('loyalty', DEFAULT_LOYALTY);
 }
 
 export const DEFAULT_GATEWAY: GatewaySettings = {

@@ -9,6 +9,7 @@ import {
   getBusinessSettings,
   getEinvoiceSettings,
   getGatewaySettings,
+  getLoyaltySettings,
   getPaymentsSettings,
   getPlatformsSettings,
   getPrintersSettings,
@@ -19,6 +20,7 @@ import type {
   BusinessSettings,
   EinvoiceSettings,
   GatewaySettings,
+  LoyaltySettings,
   PaymentsSettings,
   PlatformsSettings,
   PrintersSettings,
@@ -45,6 +47,7 @@ function fullPayload() {
     einvoice: maskedEinvoice(),
     gateway: maskedGateway(),
     platforms: getPlatformsSettings(),
+    loyalty: getLoyaltySettings(),
   };
 }
 
@@ -57,7 +60,7 @@ settingsRouter.get('/', (_req, res) => {
 });
 
 settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
-  const { business, tax, printers, payments, einvoice, gateway, platforms } = req.body as {
+  const { business, tax, printers, payments, einvoice, gateway, platforms, loyalty } = req.body as {
     business?: Partial<BusinessSettings>;
     tax?: Partial<TaxSettings>;
     printers?: Partial<PrintersSettings>;
@@ -65,6 +68,7 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
     einvoice?: Partial<EinvoiceSettings>;
     gateway?: Partial<GatewaySettings>;
     platforms?: Partial<PlatformsSettings>;
+    loyalty?: Partial<LoyaltySettings>;
   };
   if (business) {
     setSetting('business', { ...DEFAULT_BUSINESS, ...getBusinessSettings(), ...business });
@@ -160,6 +164,13 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
         enabled: !!p.enabled,
       })),
     });
+  }
+  if (loyalty) {
+    const merged: LoyaltySettings = { ...getLoyaltySettings(), ...loyalty };
+    if (merged.earnPointsPerRm < 0 || merged.redeemPointsPerRm < 1 || merged.minRedeemPoints < 0) {
+      throw badRequest('Loyalty rates must be non-negative (redeem points per RM at least 1)');
+    }
+    setSetting('loyalty', merged);
   }
   audit(req.user!.id, 'settings.update');
   res.json(fullPayload());

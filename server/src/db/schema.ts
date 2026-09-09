@@ -377,6 +377,34 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_ingredient_movements_ing ON ingredient_movements(ingredient_id);
   `,
+  // v11 — customer loyalty: phone-number members, points earn/redeem
+  `
+  CREATE TABLE customers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    phone TEXT NOT NULL UNIQUE,
+    name TEXT,
+    points INTEGER NOT NULL DEFAULT 0,
+    visits INTEGER NOT NULL DEFAULT 0,
+    total_spent_cents INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_visit_at TEXT
+  );
+
+  CREATE TABLE point_movements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL REFERENCES customers(id),
+    delta INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    order_id INTEGER REFERENCES orders(id),
+    user_id INTEGER REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX idx_point_movements_customer ON point_movements(customer_id);
+
+  ALTER TABLE orders ADD COLUMN customer_id INTEGER REFERENCES customers(id);
+  ALTER TABLE orders ADD COLUMN points_earned INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE orders ADD COLUMN points_redeemed INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function applySchema(db: Database): void {

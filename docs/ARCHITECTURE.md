@@ -110,6 +110,14 @@ configurable.
   stock remains the hard sold-out enforcement. Recipes are edited in the menu
   admin, which also surfaces the computed food cost per item.
 - **audit_log** — who did what, when (voids, price overrides, shift events).
+- **customers → point_movements** — phone-number loyalty. Members attach to an
+  open order at payment (created on first join); on full settlement the member
+  earns points on net spend (total minus points tender) at the configured rate,
+  updating lifetime visits/spend. Redemption converts points to currency and
+  records it as a payment (kind `other`, channel "Points"), so split logic,
+  settlement and drawer math need no special cases — cash reconciliation never
+  sees points. Every earn/redeem/manual adjustment lands in the points ledger;
+  platform delivery orders are excluded from membership.
 
 ## Order lifecycle
 

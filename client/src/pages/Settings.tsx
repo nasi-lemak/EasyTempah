@@ -5,6 +5,7 @@ import type {
   BusinessSettings,
   EinvoiceSettings,
   GatewaySettings,
+  LoyaltySettings,
   PaymentsSettings,
   PlatformsSettings,
   PrintersSettings,
@@ -19,6 +20,7 @@ type SettingsPayload = {
   einvoice: EinvoiceSettings;
   gateway: GatewaySettings;
   platforms: PlatformsSettings;
+  loyalty: LoyaltySettings;
 };
 
 export default function SettingsPage() {
@@ -32,6 +34,7 @@ export default function SettingsPage() {
   const [gateway, setGateway] = useState<GatewaySettings | null>(null);
   const [gatewaySecret, setGatewaySecret] = useState('');
   const [platforms, setPlatforms] = useState<PlatformsSettings | null>(null);
+  const [loyalty, setLoyalty] = useState<LoyaltySettings | null>(null);
   const [saved, setSaved] = useState(false);
   const [testMsg, setTestMsg] = useState('');
   const [backupMsg, setBackupMsg] = useState('');
@@ -59,11 +62,12 @@ export default function SettingsPage() {
         setEinvoice(r.einvoice);
         setGateway(r.gateway);
         setPlatforms(r.platforms);
+        setLoyalty(r.loyalty);
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, []);
 
-  if (!business || !tax || !printers || !payments || !einvoice || !gateway || !platforms) {
+  if (!business || !tax || !printers || !payments || !einvoice || !gateway || !platforms || !loyalty) {
     return <div className="muted">Loading…</div>;
   }
 
@@ -79,6 +83,7 @@ export default function SettingsPage() {
         einvoice: { ...einvoice, ...(einvoiceSecret.trim() ? { clientSecret: einvoiceSecret.trim() } : {}) },
         gateway: { ...gateway, ...(gatewaySecret.trim() ? { webhookSecret: gatewaySecret.trim() } : {}) },
         platforms,
+        loyalty,
       });
       setBusiness(r.business);
       setTax(r.tax);
@@ -87,6 +92,7 @@ export default function SettingsPage() {
       setEinvoice(r.einvoice);
       setGateway(r.gateway);
       setPlatforms(r.platforms);
+      setLoyalty(r.loyalty);
       setEinvoiceSecret('');
       setGatewaySecret('');
       setSettings(r);
@@ -296,6 +302,33 @@ export default function SettingsPage() {
         <div className="muted small mt">
           Powers both the printable counter standee and the on-screen QR shown when a cashier
           selects a wallet. Save before printing.
+        </div>
+      </div>
+
+      <div className="panel mb">
+        <h2>Loyalty (points)</h2>
+        <div className="row wrap mb">
+          <button className={loyalty.enabled ? 'primary' : ''} onClick={() => setLoyalty({ ...loyalty, enabled: !loyalty.enabled })}>
+            {loyalty.enabled ? 'Enabled' : 'Disabled'}
+          </button>
+        </div>
+        <div className="row">
+          <div className="grow mb">
+            <label>Points earned per RM1</label>
+            <input type="number" value={loyalty.earnPointsPerRm} onChange={(e) => setLoyalty({ ...loyalty, earnPointsPerRm: Number(e.target.value) })} style={{ width: '100%' }} />
+          </div>
+          <div className="grow mb">
+            <label>Points per RM1 redeemed</label>
+            <input type="number" value={loyalty.redeemPointsPerRm} onChange={(e) => setLoyalty({ ...loyalty, redeemPointsPerRm: Number(e.target.value) })} style={{ width: '100%' }} />
+          </div>
+          <div className="grow mb">
+            <label>Minimum points to redeem</label>
+            <input type="number" value={loyalty.minRedeemPoints} onChange={(e) => setLoyalty({ ...loyalty, minRedeemPoints: Number(e.target.value) })} style={{ width: '100%' }} />
+          </div>
+        </div>
+        <div className="muted small">
+          Members join by phone number at payment. Points are earned on net spend (excluding points
+          tender) once the bill settles, and redeem as tender against the balance.
         </div>
       </div>
 

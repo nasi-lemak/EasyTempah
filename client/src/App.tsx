@@ -15,6 +15,7 @@ import Users from './pages/Users';
 import SettingsPage from './pages/Settings';
 import GuestOrder from './pages/GuestOrder';
 import TableQr from './pages/TableQr';
+import Customers from './pages/Customers';
 import Einvoices from './pages/Einvoices';
 import PaymentQr from './pages/PaymentQr';
 
@@ -49,6 +50,7 @@ function Sidebar() {
       {isManager && <NavLink to="/reports">Reports</NavLink>}
       {isManager && <NavLink to="/menu-admin">Menu</NavLink>}
       {isManager && <NavLink to="/inventory">Inventory</NavLink>}
+      {isManager && <NavLink to="/customers">Members</NavLink>}
       {isManager && <NavLink to="/einvoices">E-Invoices</NavLink>}
       {isAdmin && <NavLink to="/users">Users</NavLink>}
       {isAdmin && <NavLink to="/settings">Settings</NavLink>}
@@ -116,6 +118,7 @@ export default function App() {
           <Route path="/users" element={<Users />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/table-qr" element={<TableQr />} />
+          <Route path="/customers" element={<Customers />} />
           <Route path="/einvoices" element={<Einvoices />} />
           <Route path="/payment-qr" element={<PaymentQr />} />
           <Route path="*" element={<Navigate to={home} replace />} />

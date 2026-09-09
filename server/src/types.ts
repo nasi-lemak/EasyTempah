@@ -132,6 +132,27 @@ export interface Order {
   einvoice_id: number | null;
   platform: string | null; // delivery platform key, e.g. "grabfood"; null = own order
   platform_ref: string | null; // the platform's order number for reconciliation
+  customer_id: number | null;
+  points_earned: number;
+  points_redeemed: number;
+}
+
+export interface Customer {
+  id: number;
+  phone: string;
+  name: string | null;
+  points: number;
+  visits: number;
+  total_spent_cents: number;
+  created_at: string;
+  last_visit_at: string | null;
+}
+
+export interface LoyaltySettings {
+  enabled: boolean;
+  earnPointsPerRm: number; // points earned per RM1 of net spend (excl. points tender)
+  redeemPointsPerRm: number; // points needed to redeem RM1 (100 → 1 point = 1 sen)
+  minRedeemPoints: number;
 }
 
 export interface OrderItemModifierSnapshot {

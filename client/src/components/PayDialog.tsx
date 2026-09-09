@@ -2,8 +2,112 @@ import QRCode from 'qrcode';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { useMoney, useStore } from '../store';
-import type { Order, PaymentChannel, PaymentIntent } from '../types';
+import type { Customer, Order, PaymentChannel, PaymentIntent } from '../types';
 import Modal from './Modal';
+
+/** Loyalty member panel: lookup/attach by phone, then redeem points as tender. */
+function MemberPanel({
+  order,
+  onOrder,
+}: {
+  order: Order;
+  onOrder: (o: Order) => void;
+}) {
+  const money = useMoney();
+  const loyalty = useStore((s) => s.loyalty);
+  const [phone, setPhone] = useState('');
+  const [name, setName] = useState('');
+  const [needName, setNeedName] = useState(false);
+  const [pointsStr, setPointsStr] = useState('');
+  const [error, setError] = useState('');
+
+  if (!loyalty?.enabled || order.platform) return null;
+
+  const attach = async () => {
+    setError('');
+    try {
+      const found = await api.get<{ customer: Customer | null }>(
+        `/api/customers/lookup?phone=${encodeURIComponent(phone)}`,
+      );
+      if (!found.customer && !needName) {
+        setNeedName(true); // new member — offer a name field, attach on next tap
+        return;
+      }
+      const r = await api.post<{ order: Order }>(`/api/orders/${order.id}/customer`, {
+        phone: found.customer?.phone ?? phone,
+        name: name || undefined,
+      });
+      onOrder(r.order);
+      setNeedName(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    }
+  };
+
+  const redeem = async () => {
+    setError('');
+    try {
+      const points = parseInt(pointsStr, 10);
+      const r = await api.post<{ order: Order }>(`/api/orders/${order.id}/redeem`, { points });
+      onOrder(r.order);
+      setPointsStr('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Redeem failed');
+    }
+  };
+
+  const balance = order.total_cents - order.paid_cents;
+  const maxByBalance = Math.floor((balance * loyalty.redeemPointsPerRm) / 100);
+  const maxPoints = Math.min(order.customer_points ?? 0, maxByBalance);
+
+  return (
+    <div className="panel mb" style={{ padding: '0.6rem' }}>
+      {order.customer_id ? (
+        <>
+          <div className="row">
+            <span className="grow small">
+              ⭐ {order.customer_name || 'Member'} ·{' '}
+              <span className="mono">…{(order.customer_phone ?? '').slice(-4)}</span> ·{' '}
+              <strong>{order.customer_points} pts</strong>
+            </span>
+          </div>
+          {(order.customer_points ?? 0) >= loyalty.minRedeemPoints && balance > 0 && (
+            <div className="row mt" style={{ marginTop: '0.4rem' }}>
+              <input
+                inputMode="numeric"
+                placeholder={`points (max ${maxPoints})`}
+                value={pointsStr}
+                onChange={(e) => setPointsStr(e.target.value)}
+                className="grow"
+              />
+              <button onClick={() => setPointsStr(String(maxPoints))}>Max</button>
+              <button className="primary" onClick={redeem} disabled={!pointsStr}>
+                Redeem{pointsStr ? ` · ${money(Math.round((parseInt(pointsStr, 10) || 0) * 100 / loyalty.redeemPointsPerRm))}` : ''}
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="row">
+          <input
+            inputMode="tel"
+            placeholder="Member phone (optional)"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="grow"
+          />
+          {needName && (
+            <input placeholder="Name (new member)" value={name} onChange={(e) => setName(e.target.value)} />
+          )}
+          <button onClick={attach} disabled={phone.replace(/\D/g, '').length < 8}>
+            {needName ? 'Join & attach' : 'Member'}
+          </button>
+        </div>
+      )}
+      {error && <div className="error-text mt">{error}</div>}
+    </div>
+  );
+}
 
 const QUICK_NOTES = [1000, 2000, 5000, 10000];
 
@@ -287,6 +391,8 @@ export default function PayDialog({
           <span className="mono">{money(balance)}</span>
         </div>
       </div>
+
+      <MemberPanel order={order} onOrder={(o) => (o.status === 'paid' ? onPaid(o) : onUpdated(o))} />
 
       <div className="row wrap mb">
         {[...byKind('cash'), ...byKind('card')].map((c) => (

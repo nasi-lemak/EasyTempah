@@ -150,6 +150,21 @@ export default function Receipt({
           <hr />
         </>
       )}
+      {order.customer_id && (
+        <>
+          <div className="rrow">
+            <span>Member …{(order.customer_phone ?? '').slice(-4)}</span>
+            <span>{order.points_earned > 0 ? `+${order.points_earned} pts` : ''}</span>
+          </div>
+          {order.customer_points != null && (
+            <div className="rrow">
+              <span>Points balance</span>
+              <span>{order.customer_points} pts</span>
+            </div>
+          )}
+          <hr />
+        </>
+      )}
       <div className="center">{business.receiptFooter}</div>
       {einvoice && <EinvoiceBlock einvoice={einvoice} />}
     </div>

@@ -1,6 +1,7 @@
 import { db } from '../db/connection';
 import { badRequest, conflict, notFound } from '../middleware/errors';
 import type {
+  Customer,
   Item,
   Modifier,
   ModifierGroup,
@@ -14,7 +15,7 @@ import type {
 } from '../types';
 import { audit } from './audit';
 import { cashRoundingAdjustment, computeTotals } from './orderMath';
-import { getPlatformsSettings, getTaxSettings } from './settings';
+import { getLoyaltySettings, getPlatformsSettings, getTaxSettings } from './settings';
 
 export interface OrderWithLines extends Order {
   items: OrderItem[];
@@ -22,15 +23,20 @@ export interface OrderWithLines extends Order {
   refunds: (Refund & { user_name: string | null; approved_by_name: string | null })[];
   table_name: string | null;
   opened_by_name: string | null;
+  customer_phone: string | null;
+  customer_name: string | null;
+  customer_points: number | null;
 }
 
 export function getOrder(id: number): OrderWithLines {
   const order = db
     .prepare(
-      `SELECT o.*, t.name AS table_name, u.name AS opened_by_name
+      `SELECT o.*, t.name AS table_name, u.name AS opened_by_name,
+        c.phone AS customer_phone, c.name AS customer_name, c.points AS customer_points
        FROM orders o
        LEFT JOIN dining_tables t ON t.id = o.table_id
        LEFT JOIN users u ON u.id = o.opened_by
+       LEFT JOIN customers c ON c.id = o.customer_id
        WHERE o.id = ?`,
     )
     .get(id) as OrderWithLines | undefined;
@@ -666,8 +672,96 @@ export const addPayment = db.transaction(
       db.prepare(
         `UPDATE order_items SET status = 'served' WHERE order_id = ? AND status NOT IN ('cancelled','served')`,
       ).run(orderId);
+      earnLoyaltyPoints(orderId, userId);
     }
     return { change_cents: change, paid: fullyPaid };
+  },
+);
+
+/** On full settlement: credit the attached member's points on net spend (excluding points tender). */
+function earnLoyaltyPoints(orderId: number, userId: number): void {
+  const loyalty = getLoyaltySettings();
+  if (!loyalty.enabled) return;
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Order;
+  if (!order.customer_id) return;
+  const redeemedValue = Math.round(
+    (order.points_redeemed * 100) / Math.max(1, loyalty.redeemPointsPerRm),
+  );
+  const earnBase = Math.max(0, order.total_cents - redeemedValue);
+  const points = Math.floor((earnBase / 100) * loyalty.earnPointsPerRm);
+  db.prepare(
+    `UPDATE customers SET points = points + ?, visits = visits + 1,
+       total_spent_cents = total_spent_cents + ?, last_visit_at = datetime('now')
+     WHERE id = ?`,
+  ).run(points, order.total_cents, order.customer_id);
+  db.prepare('UPDATE orders SET points_earned = ? WHERE id = ?').run(points, orderId);
+  if (points > 0) {
+    db.prepare(
+      "INSERT INTO point_movements (customer_id, delta, reason, order_id, user_id) VALUES (?, ?, 'earn', ?, ?)",
+    ).run(order.customer_id, points, orderId, userId);
+  }
+}
+
+/** Attach (creating if new) a member by phone number to an open order. */
+export const attachCustomer = db.transaction(
+  (orderId: number, phone: string, name: string | undefined, userId: number): Customer => {
+    if (!getLoyaltySettings().enabled) throw conflict('Loyalty is not enabled in Settings');
+    const order = requireOpenOrder(orderId);
+    if (order.platform) throw conflict('Platform orders do not earn loyalty points');
+    const clean = phone.replace(/[^\d+]/g, '');
+    if (!/^\+?\d{8,15}$/.test(clean)) throw badRequest('Phone number looks invalid');
+    let customer = db.prepare('SELECT * FROM customers WHERE phone = ?').get(clean) as
+      | Customer
+      | undefined;
+    if (!customer) {
+      const info = db
+        .prepare('INSERT INTO customers (phone, name) VALUES (?, ?)')
+        .run(clean, name?.trim() || null);
+      customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(info.lastInsertRowid) as Customer;
+      audit(userId, 'customer.create', { phone: clean });
+    } else if (name?.trim() && !customer.name) {
+      db.prepare('UPDATE customers SET name = ? WHERE id = ?').run(name.trim(), customer.id);
+      customer.name = name.trim();
+    }
+    db.prepare('UPDATE orders SET customer_id = ? WHERE id = ?').run(customer.id, orderId);
+    return customer;
+  },
+);
+
+/**
+ * Redeem points as tender: converts points to RM value and records it as a
+ * payment (kind other, channel "Points") — drawer math untouched, split and
+ * settlement logic identical to any other payment.
+ */
+export const redeemPoints = db.transaction(
+  (orderId: number, points: number, userId: number): { value_cents: number; paid: boolean } => {
+    const loyalty = getLoyaltySettings();
+    if (!loyalty.enabled) throw conflict('Loyalty is not enabled');
+    const order = requireOpenOrder(orderId);
+    if (!order.customer_id) throw conflict('Attach a member to the order first');
+    const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(order.customer_id) as Customer;
+    if (!Number.isInteger(points) || points <= 0) throw badRequest('Invalid points');
+    if (points < loyalty.minRedeemPoints) {
+      throw badRequest(`Minimum redemption is ${loyalty.minRedeemPoints} points`);
+    }
+    if (points > customer.points) throw badRequest(`Member only has ${customer.points} points`);
+    const value = Math.round((points * 100) / Math.max(1, loyalty.redeemPointsPerRm));
+    const balance = order.total_cents - order.paid_cents;
+    if (value > balance) throw badRequest('Redemption exceeds the remaining balance');
+
+    db.prepare('UPDATE customers SET points = points - ? WHERE id = ?').run(points, customer.id);
+    db.prepare(
+      "INSERT INTO point_movements (customer_id, delta, reason, order_id, user_id) VALUES (?, ?, 'redeem', ?, ?)",
+    ).run(customer.id, -points, orderId, userId);
+    db.prepare('UPDATE orders SET points_redeemed = points_redeemed + ? WHERE id = ?').run(points, orderId);
+    audit(userId, 'loyalty.redeem', { orderId, customerId: customer.id, points, value });
+
+    const result = addPayment(
+      orderId,
+      { method: 'other', channel: 'Points', amount_cents: value, reference: `points:${points}` },
+      userId,
+    );
+    return { value_cents: value, paid: result.paid };
   },
 );
 

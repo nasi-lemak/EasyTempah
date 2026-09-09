@@ -8,6 +8,8 @@ import {
   addItems,
   addPayment,
   addRefund,
+  attachCustomer,
+  redeemPoints,
   cancelLine,
   createOrder,
   getOrder,
@@ -172,6 +174,24 @@ ordersRouter.patch('/:id', (req: AuthedRequest, res) => {
   }
   publish('orders');
   res.json({ order: getOrder(orderId) });
+});
+
+/** Attach a loyalty member (created if new) to an open order. */
+ordersRouter.post('/:id/customer', (req: AuthedRequest, res) => {
+  const { phone, name } = req.body as { phone?: string; name?: string };
+  if (!phone) throw badRequest('phone required');
+  const customer = attachCustomer(Number(req.params.id), phone, name, req.user!.id);
+  publish('orders');
+  res.json({ customer, order: getOrder(Number(req.params.id)) });
+});
+
+/** Redeem points as tender against the order's balance. */
+ordersRouter.post('/:id/redeem', (req: AuthedRequest, res) => {
+  const { points } = req.body as { points?: number };
+  const result = redeemPoints(Number(req.params.id), Number(points), req.user!.id);
+  publish('orders');
+  if (result.paid) publish('tables');
+  res.json({ ...result, order: getOrder(Number(req.params.id)) });
 });
 
 /** Split selected items (whole or partial quantities) onto a new sibling bill. */

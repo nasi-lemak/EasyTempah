@@ -7,6 +7,7 @@ import { requireAuth } from './middleware/auth';
 import { errorHandler } from './middleware/errors';
 import { addClient } from './realtime/bus';
 import { authRouter } from './routes/auth';
+import { customersRouter } from './routes/customers';
 import { einvoiceRouter } from './routes/einvoice';
 import { guestRouter } from './routes/guest';
 import { inventoryRouter } from './routes/inventory';
@@ -42,6 +43,7 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/print', printRouter);
 app.use('/api/einvoice', einvoiceRouter);
 app.use('/api/payments', paymentsRouter);
+app.use('/api/customers', customersRouter);
 
 // Server-Sent Events stream for realtime updates.
 app.get('/api/events', requireAuth, (req, res) => {

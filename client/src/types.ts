@@ -187,6 +187,12 @@ export interface Order {
   void_reason: string | null;
   platform: string | null;
   platform_ref: string | null;
+  customer_id: number | null;
+  customer_phone: string | null;
+  customer_name: string | null;
+  customer_points: number | null;
+  points_earned: number;
+  points_redeemed: number;
   items: OrderItem[];
   payments: Payment[];
   refunds: Refund[];
@@ -213,6 +219,24 @@ export interface PaymentChannel {
 export interface PaymentsSettings {
   channels: PaymentChannel[];
   ewalletQrPayload: string;
+}
+
+export interface Customer {
+  id: number;
+  phone: string;
+  name: string | null;
+  points: number;
+  visits: number;
+  total_spent_cents: number;
+  created_at: string;
+  last_visit_at: string | null;
+}
+
+export interface LoyaltySettings {
+  enabled: boolean;
+  earnPointsPerRm: number;
+  redeemPointsPerRm: number;
+  minRedeemPoints: number;
 }
 
 export interface DeliveryPlatform {
