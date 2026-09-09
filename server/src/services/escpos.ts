@@ -113,7 +113,7 @@ export function renderReceipt(
   p.rule();
 
   for (const line of order.items) {
-    if (line.status === 'cancelled') continue;
+    if (line.status === 'cancelled' || line.parent_line_id) continue;
     p.cols(`${line.qty} x ${line.name}`, rm(line.line_total_cents, sym));
     const mods = JSON.parse(line.modifiers_json) as OrderItemModifierSnapshot[];
     for (const m of mods) {

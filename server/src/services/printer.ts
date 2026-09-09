@@ -47,7 +47,9 @@ export async function printKitchenTickets(orderId: number, lineIds: number[]): P
     if (!stations.some((s) => printers[s].enabled)) return;
 
     const order = getOrder(orderId);
-    const idSet = new Set(lineIds);
+    // A set meal prints its components, not the bundle parent line.
+    const parentIds = new Set(order.items.filter((l) => l.parent_line_id).map((l) => l.parent_line_id));
+    const idSet = new Set(lineIds.filter((id) => !parentIds.has(id)));
     const where =
       order.type === 'dine_in' ? `Table ${order.table_name ?? ''}` : order.type.replace('_', ' ');
 

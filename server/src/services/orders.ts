@@ -154,6 +154,8 @@ export interface AddLineInput {
   item_id: number;
   qty: number;
   modifier_ids?: number[];
+  /** For combo items: one chosen component per choice group. */
+  combo_choices?: { group_id: number; item_id: number }[];
   notes?: string | null;
 }
 
@@ -184,6 +186,11 @@ function insertLines(orderId: number, lines: AddLineInput[], opts: InsertOpts): 
     }
     const item = itemStmt.get(line.item_id) as Item | undefined;
     if (!item) throw badRequest(`Item ${line.item_id} not found or inactive`);
+
+    if (item.is_combo) {
+      insertComboLine(orderId, item, line, opts);
+      continue;
+    }
 
     const snapshots: OrderItemModifierSnapshot[] = [];
     for (const modId of line.modifier_ids ?? []) {
@@ -232,6 +239,72 @@ function insertLines(orderId: number, lines: AddLineInput[], opts: InsertOpts): 
     insertedIds.push(Number(info.lastInsertRowid));
   }
   return insertedIds;
+}
+
+/**
+ * A set meal inserts one parent line at the bundle price (component choices
+ * stored as modifier-style snapshots so receipts and the cart render them),
+ * plus zero-priced child lines per component for KDS station routing and
+ * stock deduction.
+ */
+function insertComboLine(orderId: number, item: Item, line: AddLineInput, opts: InsertOpts): void {
+  if (line.modifier_ids?.length) throw badRequest('Set meals do not take modifiers');
+  const groups = db
+    .prepare('SELECT * FROM combo_groups WHERE item_id = ? ORDER BY sort, id')
+    .all(item.id) as { id: number; name: string }[];
+  if (!groups.length) throw badRequest(`"${item.name}" has no set choices configured`);
+
+  const chosen: { group: { id: number; name: string }; component: Item; surcharge: number }[] = [];
+  for (const group of groups) {
+    const pick = (line.combo_choices ?? []).find((c) => c.group_id === group.id);
+    if (!pick) throw badRequest(`Choose an option for "${group.name}"`);
+    const eligible = db
+      .prepare('SELECT surcharge_cents FROM combo_group_items WHERE group_id = ? AND item_id = ?')
+      .get(group.id, pick.item_id) as { surcharge_cents: number } | undefined;
+    if (!eligible) throw badRequest(`That option is not available for "${group.name}"`);
+    const component = db
+      .prepare('SELECT * FROM items WHERE id = ? AND active = 1')
+      .get(pick.item_id) as Item | undefined;
+    if (!component) throw badRequest(`Component for "${group.name}" is unavailable`);
+    chosen.push({ group, component, surcharge: eligible.surcharge_cents });
+  }
+
+  const unit = item.price_cents + chosen.reduce((s, c) => s + c.surcharge, 0);
+  const snapshots: OrderItemModifierSnapshot[] = chosen.map((c) => ({
+    modifier_id: 0,
+    group_name: c.group.name,
+    name: c.component.name,
+    price_delta_cents: c.surcharge,
+  }));
+  const sentAt = opts.status === 'sent' ? new Date().toISOString().replace('T', ' ').slice(0, 19) : null;
+
+  const parentInfo = db
+    .prepare(
+      `INSERT INTO order_items (order_id, item_id, name, qty, unit_price_cents, modifiers_json, notes,
+         station, line_total_cents, source, status, sent_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(orderId, item.id, item.name, line.qty, item.price_cents, JSON.stringify(snapshots),
+      line.notes ?? null, item.station, line.qty * unit, opts.source, opts.status, sentAt);
+  const parentId = Number(parentInfo.lastInsertRowid);
+
+  for (const c of chosen) {
+    if (opts.status === 'sent' && c.component.track_stock) {
+      if (c.component.stock_qty < line.qty) {
+        throw conflict(`Not enough stock for "${c.component.name}" (have ${c.component.stock_qty}, need ${line.qty})`);
+      }
+      db.prepare('UPDATE items SET stock_qty = stock_qty - ? WHERE id = ?').run(line.qty, c.component.id);
+      db.prepare(
+        'INSERT INTO stock_movements (item_id, delta, reason, ref, user_id) VALUES (?, ?, ?, ?, ?)',
+      ).run(c.component.id, -line.qty, 'sale', `order:${orderId}`, opts.userId);
+    }
+    db.prepare(
+      `INSERT INTO order_items (order_id, item_id, name, qty, unit_price_cents, modifiers_json, notes,
+         station, line_total_cents, source, status, sent_at, parent_line_id)
+       VALUES (?, ?, ?, ?, 0, '[]', ?, ?, 0, ?, ?, ?, ?)`,
+    ).run(orderId, c.component.id, c.component.name, line.qty, line.notes ?? null,
+      c.component.station, opts.source, opts.status, sentAt, parentId);
+  }
 }
 
 export const addItems = db.transaction((orderId: number, lines: AddLineInput[]): void => {
@@ -323,6 +396,7 @@ export const updateLine = db.transaction(
       .prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?')
       .get(lineId, orderId) as OrderItem | undefined;
     if (!line) throw notFound('Order line not found');
+    if (line.parent_line_id) throw conflict('This line is part of a set — edit the set instead');
     if (line.status !== 'pending') throw conflict('Only pending lines can be edited; cancel instead');
 
     const mods = JSON.parse(line.modifiers_json) as OrderItemModifierSnapshot[];
@@ -354,6 +428,8 @@ export const updateLine = db.transaction(
       line.qty * (line.unit_price_cents + modSum),
       lineId,
     );
+    // Set-meal components track their parent's quantity.
+    db.prepare('UPDATE order_items SET qty = ? WHERE parent_line_id = ?').run(line.qty, lineId);
     if (patch.notes !== undefined) {
       db.prepare('UPDATE order_items SET notes = ? WHERE id = ?').run(patch.notes, lineId);
     }
@@ -368,10 +444,21 @@ export const cancelLine = db.transaction((orderId: number, lineId: number, userI
     .prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?')
     .get(lineId, orderId) as OrderItem | undefined;
   if (!line) throw notFound('Order line not found');
+  if (line.parent_line_id) throw conflict('This line is part of a set — cancel the whole set');
   if (line.status === 'cancelled') return;
   const wasSent = line.status !== 'pending';
   db.prepare("UPDATE order_items SET status = 'cancelled' WHERE id = ?").run(lineId);
   if (wasSent && line.item_id) restock(line.item_id, line.qty, 'line_cancelled', `order:${orderId}`, userId);
+  // Cascade to set-meal components, restocking each fired component.
+  const children = db
+    .prepare("SELECT * FROM order_items WHERE parent_line_id = ? AND status != 'cancelled'")
+    .all(lineId) as OrderItem[];
+  for (const child of children) {
+    db.prepare("UPDATE order_items SET status = 'cancelled' WHERE id = ?").run(child.id);
+    if (child.status !== 'pending' && child.item_id) {
+      restock(child.item_id, child.qty, 'line_cancelled', `order:${orderId}`, userId);
+    }
+  }
   recomputeTotals(orderId);
   audit(userId, 'order_line.cancel', { orderId, lineId, name: line.name, qty: line.qty, wasSent });
 });
@@ -581,9 +668,18 @@ export const splitOrder = db.transaction((orderId: number, picks: SplitPick[], u
   if (order.paid_cents > 0) throw conflict('Cannot split after partial payment — settle or refund first');
   if (!Array.isArray(picks) || picks.length === 0) throw badRequest('Choose items to split off');
 
-  const active = db
+  const allActive = db
     .prepare("SELECT * FROM order_items WHERE order_id = ? AND status != 'cancelled'")
     .all(orderId) as OrderItem[];
+  const childrenOf = new Map<number, OrderItem[]>();
+  for (const l of allActive) {
+    if (l.parent_line_id) {
+      if (!childrenOf.has(l.parent_line_id)) childrenOf.set(l.parent_line_id, []);
+      childrenOf.get(l.parent_line_id)!.push(l);
+    }
+  }
+  // Splits are picked from top-level lines; set components travel with their set.
+  const active = allActive.filter((l) => !l.parent_line_id);
   const byId = new Map(active.map((l) => [l.id, l]));
   const totalUnits = active.reduce((s, l) => s + l.qty, 0);
   let movedUnits = 0;
@@ -615,12 +711,43 @@ export const splitOrder = db.transaction((orderId: number, picks: SplitPick[], u
     );
   const newId = Number(info.lastInsertRowid);
 
+  const cloneLine = (line: OrderItem, qty: number, perUnit: number, parentLineId: number | null): number => {
+    const info = db
+      .prepare(
+        `INSERT INTO order_items (order_id, item_id, name, qty, unit_price_cents, modifiers_json, notes,
+           status, station, line_total_cents, source, sent_at, created_at, parent_line_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        newId,
+        line.item_id,
+        line.name,
+        qty,
+        line.unit_price_cents,
+        line.modifiers_json,
+        line.notes,
+        line.status,
+        line.station,
+        qty * perUnit,
+        line.source,
+        line.sent_at,
+        line.created_at,
+        parentLineId,
+      );
+    return Number(info.lastInsertRowid);
+  };
+
   for (const p of picks) {
     const line = byId.get(p.line_id)!;
+    const children = childrenOf.get(line.id) ?? [];
     if (p.qty === line.qty) {
       db.prepare('UPDATE order_items SET order_id = ? WHERE id = ?').run(newId, line.id);
+      for (const child of children) {
+        db.prepare('UPDATE order_items SET order_id = ? WHERE id = ?').run(newId, child.id);
+      }
     } else {
-      // Partial quantity: shrink the original row, clone the moved units.
+      // Partial quantity: shrink the original row (and its set components),
+      // clone the moved units — components go with their new parent.
       const mods = JSON.parse(line.modifiers_json) as OrderItemModifierSnapshot[];
       const perUnit = line.unit_price_cents + mods.reduce((s, m) => s + m.price_delta_cents, 0);
       db.prepare('UPDATE order_items SET qty = ?, line_total_cents = ? WHERE id = ?').run(
@@ -628,25 +755,11 @@ export const splitOrder = db.transaction((orderId: number, picks: SplitPick[], u
         (line.qty - p.qty) * perUnit,
         line.id,
       );
-      db.prepare(
-        `INSERT INTO order_items (order_id, item_id, name, qty, unit_price_cents, modifiers_json, notes,
-           status, station, line_total_cents, source, sent_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        newId,
-        line.item_id,
-        line.name,
-        p.qty,
-        line.unit_price_cents,
-        line.modifiers_json,
-        line.notes,
-        line.status,
-        line.station,
-        p.qty * perUnit,
-        line.source,
-        line.sent_at,
-        line.created_at,
-      );
+      const newParentId = cloneLine(line, p.qty, perUnit, null);
+      for (const child of children) {
+        db.prepare('UPDATE order_items SET qty = ? WHERE id = ?').run(line.qty - p.qty, child.id);
+        cloneLine(child, p.qty, 0, newParentId);
+      }
     }
   }
   recomputeTotals(orderId);

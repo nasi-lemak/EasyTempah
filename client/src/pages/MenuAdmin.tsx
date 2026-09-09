@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import Modal from '../components/Modal';
 import { useMoney } from '../store';
-import type { Category, Item, Modifier, ModifierGroup } from '../types';
+import type { Category, ComboGroup, ComboGroupItem, Item, Modifier, ModifierGroup } from '../types';
 
 interface AdminMenu {
   categories: Category[];
@@ -10,6 +10,13 @@ interface AdminMenu {
   groups: ModifierGroup[];
   modifiers: Modifier[];
   links: { item_id: number; group_id: number }[];
+  comboGroups: ComboGroup[];
+  comboItems: ComboGroupItem[];
+}
+
+interface ComboGroupForm {
+  name: string;
+  items: { item_id: number; surcharge_cents: number }[];
 }
 
 const emptyItemForm = {
@@ -27,6 +34,7 @@ export default function MenuAdmin() {
   const [menu, setMenu] = useState<AdminMenu | null>(null);
   const [tab, setTab] = useState<'items' | 'categories' | 'modifiers'>('items');
   const [itemForm, setItemForm] = useState<typeof emptyItemForm | null>(null);
+  const [comboForm, setComboForm] = useState<ComboGroupForm[]>([]);
   const [catName, setCatName] = useState('');
   const [groupForm, setGroupForm] = useState({ name: '', min: 0, max: 0 });
   const [modForm, setModForm] = useState({ group_id: 0, name: '', price: '' });
@@ -60,15 +68,18 @@ export default function MenuAdmin() {
         active: itemForm.active,
         modifier_group_ids: itemForm.modifier_group_ids,
       };
-      if (itemForm.id) {
-        await api.patch(`/api/menu/items/${itemForm.id}`, body);
+      let itemId = itemForm.id;
+      if (itemId) {
+        await api.patch(`/api/menu/items/${itemId}`, body);
       } else {
-        await api.post('/api/menu/items', body);
+        const r = await api.post<{ id: number }>('/api/menu/items', body);
+        itemId = r.id;
       }
+      await api.put(`/api/menu/items/${itemId}/combo`, { groups: comboForm });
       setItemForm(null);
     });
 
-  const editItem = (item: Item) =>
+  const editItem = (item: Item) => {
     setItemForm({
       id: item.id,
       name: item.name,
@@ -78,6 +89,17 @@ export default function MenuAdmin() {
       active: item.active === 1,
       modifier_group_ids: menu.links.filter((l) => l.item_id === item.id).map((l) => l.group_id),
     });
+    setComboForm(
+      menu.comboGroups
+        .filter((g) => g.item_id === item.id)
+        .map((g) => ({
+          name: g.name,
+          items: menu.comboItems
+            .filter((ci) => ci.group_id === g.id)
+            .map((ci) => ({ item_id: ci.item_id, surcharge_cents: ci.surcharge_cents })),
+        })),
+    );
+  };
 
   return (
     <div>
@@ -93,7 +115,13 @@ export default function MenuAdmin() {
 
       {tab === 'items' && (
         <>
-          <button className="primary mb" onClick={() => setItemForm({ ...emptyItemForm, category_id: menu.categories[0]?.id ?? 0 })}>
+          <button
+            className="primary mb"
+            onClick={() => {
+              setItemForm({ ...emptyItemForm, category_id: menu.categories[0]?.id ?? 0 });
+              setComboForm([]);
+            }}
+          >
             + New item
           </button>
           <table className="data">
@@ -109,7 +137,7 @@ export default function MenuAdmin() {
                   .filter(Boolean);
                 return (
                   <tr key={item.id}>
-                    <td>{item.name}</td>
+                    <td>{item.name}{item.is_combo ? <span className="badge sent" style={{ marginLeft: 6 }}>set</span> : null}</td>
                     <td>{cat?.name}</td>
                     <td>{item.station}</td>
                     <td className="num">{money(item.price_cents)}</td>
@@ -251,6 +279,77 @@ export default function MenuAdmin() {
               );
             })}
           </div>
+          <label>Set meal (combo) — choice groups</label>
+          {comboForm.map((g, gi) => (
+            <div key={gi} className="panel mb" style={{ padding: '0.6rem' }}>
+              <div className="row mb">
+                <input
+                  value={g.name}
+                  placeholder="Group name, e.g. Drink"
+                  className="grow"
+                  onChange={(e) => {
+                    const next = comboForm.slice();
+                    next[gi] = { ...g, name: e.target.value };
+                    setComboForm(next);
+                  }}
+                />
+                <button className="danger" onClick={() => setComboForm(comboForm.filter((_, i) => i !== gi))}>✕</button>
+              </div>
+              {g.items.map((opt, oi) => (
+                <div key={opt.item_id} className="row mb" style={{ marginBottom: '0.3rem' }}>
+                  <span className="grow small">{menu.items.find((i) => i.id === opt.item_id)?.name}</span>
+                  <span className="muted small">+RM</span>
+                  <input
+                    inputMode="decimal"
+                    style={{ width: 70 }}
+                    value={(opt.surcharge_cents / 100).toFixed(2)}
+                    onChange={(e) => {
+                      const next = comboForm.slice();
+                      next[gi].items[oi] = {
+                        ...opt,
+                        surcharge_cents: Math.max(0, Math.round(parseFloat(e.target.value || '0') * 100)),
+                      };
+                      setComboForm(next);
+                    }}
+                  />
+                  <button
+                    className="ghost small"
+                    onClick={() => {
+                      const next = comboForm.slice();
+                      next[gi] = { ...g, items: g.items.filter((_, i) => i !== oi) };
+                      setComboForm(next);
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <select
+                value=""
+                onChange={(e) => {
+                  const id = Number(e.target.value);
+                  if (!id || g.items.some((x) => x.item_id === id)) return;
+                  const next = comboForm.slice();
+                  next[gi] = { ...g, items: [...g.items, { item_id: id, surcharge_cents: 0 }] };
+                  setComboForm(next);
+                }}
+              >
+                <option value="">+ add option…</option>
+                {menu.items
+                  .filter((i) => !i.is_combo && i.id !== itemForm.id && i.active)
+                  .map((i) => (
+                    <option key={i.id} value={i.id}>{i.name}</option>
+                  ))}
+              </select>
+            </div>
+          ))}
+          <div className="row mb">
+            <button onClick={() => setComboForm([...comboForm, { name: '', items: [] }])}>+ Add choice group</button>
+            {comboForm.length > 0 && (
+              <span className="muted small">Groups make this item a set meal; remove all to revert.</span>
+            )}
+          </div>
+
           <button className="primary" onClick={saveItem}>Save</button>
           {error && <div className="error-text mt">{error}</div>}
         </Modal>

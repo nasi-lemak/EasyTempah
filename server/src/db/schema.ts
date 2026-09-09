@@ -317,6 +317,29 @@ const MIGRATIONS: string[] = [
     WHERE id IN (SELECT order_id FROM _einv_links);
   DROP TABLE _einv_links;
   `,
+  // v9 — combos / set meals: choice groups on a combo item, and component
+  // order lines linked to their set's parent line for KDS routing and stock
+  `
+  ALTER TABLE items ADD COLUMN is_combo INTEGER NOT NULL DEFAULT 0;
+
+  CREATE TABLE combo_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    sort INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX idx_combo_groups_item ON combo_groups(item_id);
+
+  CREATE TABLE combo_group_items (
+    group_id INTEGER NOT NULL REFERENCES combo_groups(id) ON DELETE CASCADE,
+    item_id INTEGER NOT NULL REFERENCES items(id),
+    surcharge_cents INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (group_id, item_id)
+  );
+
+  ALTER TABLE order_items ADD COLUMN parent_line_id INTEGER REFERENCES order_items(id);
+  CREATE INDEX idx_order_items_parent ON order_items(parent_line_id);
+  `,
 ];
 
 export function applySchema(db: Database): void {

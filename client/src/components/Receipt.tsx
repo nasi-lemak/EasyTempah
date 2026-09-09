@@ -48,7 +48,7 @@ export default function Receipt({
   einvoice?: ReceiptEinvoice | null;
 }) {
   const money = (c: number | null | undefined) => formatMoney(c, business.currencySymbol);
-  const lines = order.items.filter((i) => i.status !== 'cancelled');
+  const lines = order.items.filter((i) => i.status !== 'cancelled' && !i.parent_line_id);
   return (
     <div className="receipt">
       <h2>{business.name}</h2>

@@ -235,7 +235,8 @@ export function buildOrderInvoice(
   supplierName: string,
   internalId: string,
 ): Record<string, unknown> {
-  const active = order.items.filter((i) => i.status !== 'cancelled');
+  // Set-meal component lines carry zero amounts; the parent line holds the price.
+  const active = order.items.filter((i) => i.status !== 'cancelled' && !i.parent_line_id);
   const taxShares = apportionTax(
     // tax applies after discount; apportion against pre-discount line totals for simplicity
     active.map((i) => i.line_total_cents),

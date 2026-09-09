@@ -40,6 +40,20 @@ export interface Item {
   stock_qty: number;
   low_stock_threshold: number;
   sort: number;
+  is_combo: number;
+}
+
+export interface ComboGroup {
+  id: number;
+  item_id: number; // the combo item this choice group belongs to
+  name: string;
+  sort: number;
+}
+
+export interface ComboGroupItem {
+  group_id: number;
+  item_id: number; // eligible component item
+  surcharge_cents: number;
 }
 
 export interface ModifierGroup {
@@ -118,6 +132,7 @@ export interface OrderItem {
   station: Station;
   line_total_cents: number;
   source: 'staff' | 'guest';
+  parent_line_id: number | null; // set-meal component lines point at their parent
   sent_at: string | null;
   created_at: string;
 }

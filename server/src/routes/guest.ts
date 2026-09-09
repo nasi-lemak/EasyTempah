@@ -30,10 +30,12 @@ guestRouter.get('/:token/menu', (req, res) => {
     .all() as Category[];
   const items = db
     .prepare(
-      `SELECT id, category_id, name, price_cents, station, track_stock, stock_qty, low_stock_threshold, sort
+      `SELECT id, category_id, name, price_cents, station, track_stock, stock_qty, low_stock_threshold, sort, is_combo
        FROM items WHERE active = 1 ORDER BY sort, name`,
     )
     .all() as Item[];
+  const comboGroups = db.prepare('SELECT * FROM combo_groups ORDER BY sort, id').all();
+  const comboItems = db.prepare('SELECT * FROM combo_group_items').all();
   const groups = db.prepare('SELECT * FROM modifier_groups').all() as ModifierGroup[];
   const modifiers = db
     .prepare('SELECT * FROM modifiers WHERE active = 1 ORDER BY sort, name')
@@ -45,7 +47,7 @@ guestRouter.get('/:token/menu', (req, res) => {
     table: { name: table.name, zone: table.zone },
     business: { name: business.name, currencySymbol: business.currencySymbol },
     tax: { taxLabel: tax.taxLabel, serviceLabel: tax.serviceLabel },
-    menu: { categories, items, groups, modifiers, links },
+    menu: { categories, items, groups, modifiers, links, comboGroups, comboItems },
   });
 });
 
@@ -68,7 +70,7 @@ guestRouter.get('/:token/order', (req, res) => {
       tax_cents: order.tax_cents,
       total_cents: order.total_cents,
       items: order.items
-        .filter((i) => i.status !== 'cancelled')
+        .filter((i) => i.status !== 'cancelled' && !i.parent_line_id)
         .map((i) => ({
           id: i.id,
           name: i.name,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import ComboDialog, { type ComboChoice } from '../components/ComboDialog';
 import Modal from '../components/Modal';
 import ModifierDialog, { type ModifierChoice } from '../components/ModifierDialog';
 import { formatMoney } from '../store';
@@ -39,6 +40,7 @@ interface CartLine {
   item: Item;
   qty: number;
   modifier_ids: number[];
+  combo_choices?: { group_id: number; item_id: number }[];
   modNames: string[];
   modDelta: number;
   notes: string;
@@ -58,6 +60,7 @@ export default function GuestOrder() {
   const [activeCat, setActiveCat] = useState<number | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [modItem, setModItem] = useState<Item | null>(null);
+  const [comboItem, setComboItem] = useState<Item | null>(null);
   const [showReview, setShowReview] = useState(false);
   const [showTab, setShowTab] = useState(false);
   const [sent, setSent] = useState(false);
@@ -108,9 +111,34 @@ export default function GuestOrder() {
     setModItem(null);
   };
 
+  const addComboToCart = (choice: ComboChoice) => {
+    const surcharge = choice.combo_choices.reduce((s, c) => {
+      const opt = info?.menu.comboItems.find((ci) => ci.group_id === c.group_id && ci.item_id === c.item_id);
+      return s + (opt?.surcharge_cents ?? 0);
+    }, 0);
+    const names = choice.combo_choices.map(
+      (c) => info?.menu.items.find((i) => i.id === c.item_id)?.name ?? '',
+    );
+    setCart((c) => [
+      ...c,
+      {
+        key: Date.now() + Math.random(),
+        item: choice.item,
+        qty: choice.qty,
+        modifier_ids: [],
+        combo_choices: choice.combo_choices,
+        modNames: names,
+        modDelta: surcharge,
+        notes: choice.notes,
+      },
+    ]);
+    setComboItem(null);
+  };
+
   const tapItem = (item: Item) => {
     if (item.track_stock === 1 && item.stock_qty <= 0) return;
-    if (itemHasModifiers(item)) setModItem(item);
+    if (item.is_combo) setComboItem(item);
+    else if (itemHasModifiers(item)) setModItem(item);
     else addToCart({ item, qty: 1, modifier_ids: [], notes: '' });
   };
 
@@ -130,6 +158,7 @@ export default function GuestOrder() {
             item_id: l.item.id,
             qty: l.qty,
             modifier_ids: l.modifier_ids,
+            combo_choices: l.combo_choices,
             notes: l.notes || undefined,
           })),
         }),
@@ -212,6 +241,9 @@ export default function GuestOrder() {
 
       {modItem && info && (
         <ModifierDialog item={modItem} menu={info.menu} onConfirm={addToCart} onClose={() => setModItem(null)} />
+      )}
+      {comboItem && info && (
+        <ComboDialog item={comboItem} menu={info.menu} onConfirm={addComboToCart} onClose={() => setComboItem(null)} />
       )}
 
       {showReview && (

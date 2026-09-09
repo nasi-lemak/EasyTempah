@@ -105,6 +105,21 @@ const seed = db.transaction(() => {
   addItem(catDesserts, 'ABC (Ais Kacang)', 550, 'bar', [], 2);
   addItem(catDesserts, 'Pisang Goreng (4 pcs)', 450, 'kitchen', [], 3, 30);
 
+  // Set meal: a combo with a main and a drink choice at a bundle price
+  const setId = addItem(catRice, 'Set Nasi Lemak + Drink', 790, 'kitchen', [], 0);
+  db.prepare('UPDATE items SET is_combo = 1 WHERE id = ?').run(setId);
+  const insertComboGroup = db.prepare('INSERT INTO combo_groups (item_id, name, sort) VALUES (?, ?, ?)');
+  const insertComboItem = db.prepare(
+    'INSERT INTO combo_group_items (group_id, item_id, surcharge_cents) VALUES (?, ?, ?)',
+  );
+  const gMain = Number(insertComboGroup.run(setId, 'Main', 0).lastInsertRowid);
+  insertComboItem.run(gMain, 1, 0); // Nasi Lemak Biasa
+  insertComboItem.run(gMain, 3, 200); // Nasi Goreng Kampung +RM2
+  const gDrink = Number(insertComboGroup.run(setId, 'Drink', 1).lastInsertRowid);
+  insertComboItem.run(gDrink, 15, 0); // Teh Tarik
+  insertComboItem.run(gDrink, 16, 0); // Kopi O
+  insertComboItem.run(gDrink, 17, 150); // Milo Dinosaur +RM1.50
+
   // Tables, laid out on the floor plan (pos_x/pos_y are % of the zone canvas)
   const insertTable = db.prepare(
     'INSERT INTO dining_tables (name, zone, seats, pos_x, pos_y, shape, qr_token) VALUES (?, ?, ?, ?, ?, ?, ?)',

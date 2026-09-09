@@ -30,6 +30,20 @@ export interface Item {
   stock_qty: number;
   low_stock_threshold: number;
   sort: number;
+  is_combo: number;
+}
+
+export interface ComboGroup {
+  id: number;
+  item_id: number;
+  name: string;
+  sort: number;
+}
+
+export interface ComboGroupItem {
+  group_id: number;
+  item_id: number;
+  surcharge_cents: number;
 }
 
 export interface ModifierGroup {
@@ -54,6 +68,8 @@ export interface MenuData {
   groups: ModifierGroup[];
   modifiers: Modifier[];
   links: { item_id: number; group_id: number }[];
+  comboGroups: ComboGroup[];
+  comboItems: ComboGroupItem[];
 }
 
 export interface DiningTable {
@@ -96,6 +112,7 @@ export interface OrderItem {
   station: Station;
   line_total_cents: number;
   source: 'staff' | 'guest';
+  parent_line_id: number | null;
   sent_at: string | null;
   created_at: string;
 }

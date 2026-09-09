@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
+import ComboDialog, { type ComboChoice } from '../components/ComboDialog';
 import Modal from '../components/Modal';
 import ModifierDialog, { type ModifierChoice } from '../components/ModifierDialog';
 import PayDialog from '../components/PayDialog';
@@ -28,6 +29,7 @@ export default function Pos() {
   const [order, setOrder] = useState<Order | null>(null);
   const [activeCat, setActiveCat] = useState<number | null>(null);
   const [modItem, setModItem] = useState<Item | null>(null);
+  const [comboItem, setComboItem] = useState<Item | null>(null);
   const [showPay, setShowPay] = useState(false);
   const [showDiscount, setShowDiscount] = useState(false);
   const [showSplit, setShowSplit] = useState(false);
@@ -101,10 +103,29 @@ export default function Pos() {
       setModItem(null);
     });
 
+  const addComboLine = (choice: ComboChoice) =>
+    run(async () => {
+      if (!order) return;
+      const r = await api.post<{ order: Order }>(`/api/orders/${order.id}/items`, {
+        lines: [
+          {
+            item_id: choice.item.id,
+            qty: choice.qty,
+            combo_choices: choice.combo_choices,
+            notes: choice.notes || undefined,
+          },
+        ],
+      });
+      setOrder(r.order);
+      setComboItem(null);
+    });
+
   const tapItem = (item: Item) => {
     if (!order) return;
     if (item.track_stock && item.stock_qty <= 0) return;
-    if (itemHasModifiers(item)) {
+    if (item.is_combo) {
+      setComboItem(item);
+    } else if (itemHasModifiers(item)) {
       setModItem(item);
     } else {
       addLine({ item, qty: 1, modifier_ids: [], notes: '' });
@@ -189,8 +210,9 @@ export default function Pos() {
 
   if (!order || !menu) return <div className="muted">Loading…</div>;
 
-  const activeLines = order.items.filter((l) => l.status !== 'cancelled');
-  const pendingCount = order.items.filter((l) => l.status === 'pending').length;
+  // Set-meal component rows are internal (KDS/stock); the cart shows the set line.
+  const activeLines = order.items.filter((l) => l.status !== 'cancelled' && !l.parent_line_id);
+  const pendingCount = order.items.filter((l) => l.status === 'pending' && !l.parent_line_id).length;
   const isOpen = order.status === 'open';
 
   return (
@@ -360,6 +382,9 @@ export default function Pos() {
       {modItem && (
         <ModifierDialog item={modItem} menu={menu} onConfirm={addLine} onClose={() => setModItem(null)} />
       )}
+      {comboItem && (
+        <ComboDialog item={comboItem} menu={menu} onConfirm={addComboLine} onClose={() => setComboItem(null)} />
+      )}
       {showPay && (
         <PayDialog order={order} onUpdated={setOrder} onPaid={onPaid} onClose={() => setShowPay(false)} />
       )}
@@ -419,7 +444,7 @@ function SplitDialog({
   onClose: () => void;
 }) {
   const money = useMoney();
-  const active = order.items.filter((l) => l.status !== 'cancelled');
+  const active = order.items.filter((l) => l.status !== 'cancelled' && !l.parent_line_id);
   const [picks, setPicks] = useState<Record<number, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

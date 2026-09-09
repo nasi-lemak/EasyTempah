@@ -65,6 +65,15 @@ configurable.
   optional stock tracking (stock qty + low-stock threshold).
 - **modifier_groups → modifiers** — e.g. "Sugar level" (pick 1), "Add-ons"
   (pick many, priced). Linked to items via `item_modifier_groups`.
+- **combo_groups → combo_group_items** — set meals: a combo item carries choice
+  groups ("Main", "Drink"), each listing eligible component items with optional
+  surcharges. Ordering a set inserts one parent line at the bundle price (the
+  chosen components stored as modifier-style snapshots, so receipts, carts and
+  e-invoices render them with zero extra code) plus zero-priced child lines
+  (`order_items.parent_line_id`) per component — those drive KDS station
+  routing and component stock deduction. Sets edit, cancel and split as a
+  unit: parent quantity edits sync children, cancellation cascades with
+  restock, and bill splits move or proportionally clone the whole set.
 - **dining_tables** — floor layout by zone, seat count, live status derived from
   open orders. Each table carries optional `pos_x`/`pos_y` (percent coordinates
   within its zone's floor canvas) and a `shape` (square/round) for the spatial

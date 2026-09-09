@@ -24,7 +24,9 @@ menuRouter.get('/', (_req, res) => {
     item_id: number;
     group_id: number;
   }[];
-  res.json({ categories, items, groups, modifiers, links });
+  const comboGroups = db.prepare('SELECT * FROM combo_groups ORDER BY sort, id').all();
+  const comboItems = db.prepare('SELECT * FROM combo_group_items').all();
+  res.json({ categories, items, groups, modifiers, links, comboGroups, comboItems });
 });
 
 // ---- Admin CRUD (manager+) ----
@@ -36,7 +38,50 @@ menuRouter.get('/admin', requireRole('manager'), (_req, res) => {
     groups: db.prepare('SELECT * FROM modifier_groups ORDER BY name').all(),
     modifiers: db.prepare('SELECT * FROM modifiers ORDER BY sort, name').all(),
     links: db.prepare('SELECT * FROM item_modifier_groups').all(),
+    comboGroups: db.prepare('SELECT * FROM combo_groups ORDER BY sort, id').all(),
+    comboItems: db.prepare('SELECT * FROM combo_group_items').all(),
   });
+});
+
+/** Replace a combo item's choice groups wholesale (simplest correct admin semantics). */
+const saveCombo = db.transaction(
+  (itemId: number, groups: { name: string; items: { item_id: number; surcharge_cents?: number }[] }[]): void => {
+    db.prepare('DELETE FROM combo_groups WHERE item_id = ?').run(itemId); // cascades to group items
+    groups.forEach((g, idx) => {
+      if (!g.name?.trim()) throw badRequest('Choice group name required');
+      if (!Array.isArray(g.items) || g.items.length === 0) {
+        throw badRequest(`"${g.name}" needs at least one option`);
+      }
+      const info = db
+        .prepare('INSERT INTO combo_groups (item_id, name, sort) VALUES (?, ?, ?)')
+        .run(itemId, g.name.trim(), idx);
+      const groupId = Number(info.lastInsertRowid);
+      for (const opt of g.items) {
+        const component = db
+          .prepare('SELECT id, is_combo FROM items WHERE id = ?')
+          .get(opt.item_id) as { id: number; is_combo: number } | undefined;
+        if (!component) throw badRequest('Component item not found');
+        if (component.is_combo || component.id === itemId) {
+          throw badRequest('A set cannot contain another set (or itself)');
+        }
+        db.prepare(
+          'INSERT OR IGNORE INTO combo_group_items (group_id, item_id, surcharge_cents) VALUES (?, ?, ?)',
+        ).run(groupId, opt.item_id, Math.max(0, Math.round(opt.surcharge_cents ?? 0)));
+      }
+    });
+  },
+);
+
+menuRouter.put('/items/:id/combo', requireRole('manager'), (req, res) => {
+  const item = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id) as Item | undefined;
+  if (!item) throw notFound();
+  const groups = (req.body as { groups?: { name: string; items: { item_id: number; surcharge_cents?: number }[] }[] })
+    .groups;
+  if (!Array.isArray(groups)) throw badRequest('groups[] required');
+  db.prepare('UPDATE items SET is_combo = ? WHERE id = ?').run(groups.length > 0 ? 1 : 0, item.id);
+  saveCombo(item.id, groups);
+  publish('menu');
+  res.json({ ok: true, is_combo: groups.length > 0 });
 });
 
 menuRouter.post('/categories', requireRole('manager'), (req, res) => {

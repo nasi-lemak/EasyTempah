@@ -24,6 +24,7 @@ kdsRouter.get('/tickets', (req, res) => {
        JOIN orders o ON o.id = oi.order_id
        LEFT JOIN dining_tables t ON t.id = o.table_id
        WHERE o.status = 'open' AND oi.status IN ('sent','preparing','ready') ${stationFilter}
+         AND NOT EXISTS (SELECT 1 FROM order_items c WHERE c.parent_line_id = oi.id)
        ORDER BY oi.sent_at, oi.id`,
     )
     .all(...params) as Record<string, unknown>[];
