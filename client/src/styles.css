@@ -107,6 +107,27 @@ h3 { font-size: 0.95rem; }
 
 .main { flex: 1; overflow: auto; padding: 1.1rem 1.25rem; }
 
+/* Narrow screens (waiter tablets in portrait, phones): sidebar becomes a top bar. */
+@media (max-width: 900px) {
+  .shell { flex-direction: column; }
+  .sidebar {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 0.4rem 0.6rem;
+  }
+  .sidebar .brand { font-size: 1rem; padding: 0 0.5rem 0 0; white-space: nowrap; }
+  .sidebar a { padding: 0.5rem 0.6rem; white-space: nowrap; font-size: 0.9rem; }
+  .sidebar .whoami { display: none; }
+  .sidebar button { padding: 0.35rem 0.6rem; font-size: 0.85rem; white-space: nowrap; }
+  .main { padding: 0.8rem; }
+  .pos-layout { height: calc(100vh - 4.4rem); }
+  .pos-cart { max-width: 360px; }
+}
+
 /* ---------- Generic bits ---------- */
 .panel {
   background: var(--bg-panel);
