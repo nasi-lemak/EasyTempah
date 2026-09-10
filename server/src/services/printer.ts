@@ -6,9 +6,10 @@
 import net from 'net';
 import { db } from '../db/connection';
 import { ApiError } from '../middleware/errors';
+import { portalUrl } from './einvoice/client';
 import { renderKitchenTicket, renderReceipt, EscPos, type TicketLine } from './escpos';
 import { getOrder } from './orders';
-import { getBusinessSettings, getPrintersSettings, getTaxSettings } from './settings';
+import { getBusinessSettings, getEinvoiceSettings, getPrintersSettings, getTaxSettings } from './settings';
 import type { OrderItemModifierSnapshot, PrinterTarget, Station } from '../types';
 
 const SEND_TIMEOUT_MS = 5000;
@@ -32,8 +33,23 @@ export async function printReceipt(orderId: number, opts: { drawer?: boolean } =
   const printers = getPrintersSettings();
   if (!printers.receipt.enabled) throw new ApiError(409, 'Receipt printer is not enabled in Settings');
   const order = getOrder(orderId);
+  // Mirror the on-screen receipt: attach the validated e-invoice (UUID + portal QR).
+  let einvoice = null;
+  const row = db
+    .prepare(
+      "SELECT status, uuid, long_id FROM einvoices WHERE order_id = ? AND status IN ('submitted','valid') ORDER BY id DESC LIMIT 1",
+    )
+    .get(orderId) as { status: string; uuid: string | null; long_id: string | null } | undefined;
+  if (row?.uuid) {
+    einvoice = {
+      status: row.status,
+      uuid: row.uuid,
+      portal_url: row.long_id ? portalUrl(getEinvoiceSettings().environment, row.uuid, row.long_id) : null,
+    };
+  }
   const doc = renderReceipt(order, getBusinessSettings(), getTaxSettings(), {
     drawerKick: (opts.drawer ?? false) && printers.receipt.drawerKick,
+    einvoice,
   });
   await sendToPrinter(printers.receipt, doc);
 }

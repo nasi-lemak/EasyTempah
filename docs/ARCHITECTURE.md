@@ -268,9 +268,14 @@ Two paths, both driven by the same order data:
   `GET /api/orders/:id/receipt` JSON, for browsers printing through any
   OS-installed printer driver.
 - **ESC/POS bridge** — `services/escpos.ts` is a pure byte encoder (42-column
-  layout, alignment/bold/double-size, partial cut, drawer kick, ASCII-sanitised
-  text) with unit tests; `services/printer.ts` delivers documents to network
-  printers over raw TCP 9100 with a 5 s timeout. Kitchen and bar tickets print
+  layout, alignment/bold/double-size, partial cut, drawer kick, native QR codes
+  via GS ( k, and ASCII text where accented Latin transliterates — Café → Cafe —
+  before anything else degrades to `?`) with unit tests; `services/printer.ts`
+  delivers documents to network printers over raw TCP 9100 with a 5 s timeout.
+  The thermal receipt renders the same content as the HTML one: itemised lines
+  with modifiers, discount/promo/service/tax/rounding, payments with
+  tendered/change, refunds, the member points block, and the LHDN e-invoice
+  section (status, UUID, MyInvois portal QR printed natively). Kitchen and bar tickets print
   automatically when lines are fired (staff send and QR guest submissions),
   routed per station, as fire-and-forget so a dead printer never blocks an
   order; explicit prints (receipt, reprint, test page) surface a 502 to staff

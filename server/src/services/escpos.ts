@@ -19,9 +19,16 @@ export class EscPos {
     return this;
   }
 
-  /** Thermal firmwares vary in codepage support; stick to printable ASCII. */
+  /**
+   * Thermal firmwares vary in codepage support; stick to printable ASCII.
+   * Accented Latin characters transliterate (Café → Cafe) rather than degrade to '?'.
+   */
   text(s: string): this {
-    this.chunks.push(Buffer.from(s.replace(/[^\x20-\x7e\n]/g, '?'), 'ascii'));
+    const ascii = s
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\x20-\x7e\n]/g, '?');
+    this.chunks.push(Buffer.from(ascii, 'ascii'));
     return this;
   }
 
@@ -64,6 +71,18 @@ export class EscPos {
     return this.line(char.repeat(COLS));
   }
 
+  /** Native QR code (GS ( k, model 2). Data must be ASCII — fine for URLs. */
+  qr(data: string, moduleSize = 5): this {
+    const bytes = Buffer.from(data, 'ascii');
+    this.raw(GS, 0x28, 0x6b, 4, 0, 49, 65, 50, 0); // model 2
+    this.raw(GS, 0x28, 0x6b, 3, 0, 49, 67, moduleSize); // module size in dots
+    this.raw(GS, 0x28, 0x6b, 3, 0, 49, 69, 49); // error correction M
+    const len = bytes.length + 3;
+    this.raw(GS, 0x28, 0x6b, len & 0xff, (len >> 8) & 0xff, 49, 80, 48); // store
+    this.chunks.push(bytes);
+    return this.raw(GS, 0x28, 0x6b, 3, 0, 49, 81, 48); // print
+  }
+
   /** Left text and right-aligned value on one 42-column row (left wraps). */
   cols(left: string, right: string): this {
     const rightW = right.length;
@@ -90,11 +109,17 @@ function rm(cents: number, symbol: string): string {
   return `${symbol}${(cents / 100).toFixed(2)}`;
 }
 
+export interface ReceiptEinvoiceInfo {
+  status: string;
+  uuid: string;
+  portal_url: string | null;
+}
+
 export function renderReceipt(
   order: OrderWithLines,
   business: BusinessSettings,
   tax: TaxSettings,
-  opts: { drawerKick?: boolean } = {},
+  opts: { drawerKick?: boolean; einvoice?: ReceiptEinvoiceInfo | null } = {},
 ): Buffer {
   const p = new EscPos().init();
   if (opts.drawerKick) p.drawerKick();
@@ -143,7 +168,20 @@ export function renderReceipt(
     p.cols(`REFUND (${r.method}) ${r.reason}`, '-' + rm(r.amount_cents, sym));
   }
 
-  p.align('center').feed(1).line(business.receiptFooter).feed(3).cut();
+  if (order.customer_id) {
+    const tail = (order.customer_phone ?? '').slice(-4);
+    p.cols(`Member ...${tail}`, order.points_earned > 0 ? `+${order.points_earned} pts` : '');
+    if (order.customer_points != null) p.cols('Points balance', `${order.customer_points} pts`);
+  }
+
+  p.align('center').feed(1).line(business.receiptFooter);
+  if (opts.einvoice) {
+    p.align('left').rule();
+    p.align('center').bold(true).line(`LHDN e-Invoice (${opts.einvoice.status})`).bold(false);
+    p.line(opts.einvoice.uuid);
+    if (opts.einvoice.portal_url) p.feed(1).qr(opts.einvoice.portal_url);
+  }
+  p.align('center').feed(3).cut();
   return p.build();
 }
 

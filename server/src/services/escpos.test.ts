@@ -30,10 +30,22 @@ describe('EscPos builder', () => {
     expect(lines[0].length).toBe(COLS);
   });
 
-  it('replaces non-ASCII with ? instead of sending mojibake bytes', () => {
-    const buf = new EscPos().line('Café — teh').build();
+  it('transliterates accented Latin and replaces the rest with ?', () => {
+    const buf = new EscPos().line('Café — teh 拉茶').build();
     const text = buf.toString('ascii');
-    expect(text).toBe('Caf? ? teh\n');
+    expect(text).toBe('Cafe ? teh ??\n');
+  });
+
+  it('qr() emits the GS ( k store + print sequence with the payload', () => {
+    const url = 'https://myinvois.hasil.gov.my/UUID/share/LONGID';
+    const buf = new EscPos().qr(url).build();
+    const hex = buf.toString('latin1');
+    expect(hex).toContain(url); // stored payload
+    // store function: GS ( k pL pH 49 80 48
+    const store = Buffer.from([0x1d, 0x28, 0x6b, (url.length + 3) & 0xff, 0, 49, 80, 48]).toString('latin1');
+    expect(hex).toContain(store);
+    // print function: GS ( k 3 0 49 81 48
+    expect(hex).toContain(Buffer.from([0x1d, 0x28, 0x6b, 3, 0, 49, 81, 48]).toString('latin1'));
   });
 
   it('drawer kick emits ESC p', () => {
