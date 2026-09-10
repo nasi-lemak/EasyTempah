@@ -35,6 +35,7 @@ export default function Tables() {
   const [draft, setDraft] = useState<Draft>(new Map());
   const [seatTable, setSeatTable] = useState<DiningTable | null>(null);
   const [covers, setCovers] = useState(2);
+  const [manage, setManage] = useState(false);
   const [error, setError] = useState('');
 
   const load = useCallback(() => {
@@ -115,6 +116,7 @@ export default function Tables() {
           Grid
         </button>
         {hasRole(user, 'manager') && <button onClick={() => navigate('/table-qr')}>QR codes</button>}
+        {hasRole(user, 'manager') && <button onClick={() => setManage(true)}>Manage tables</button>}
         {view === 'floor' && hasRole(user, 'manager') && (
           editMode ? (
             <>
@@ -156,6 +158,15 @@ export default function Tables() {
         <GridView tables={tables} onTap={tapTable} money={money} />
       )}
 
+      {manage && (
+        <ManageTables
+          tables={tables}
+          zones={zones}
+          onChanged={load}
+          onClose={() => setManage(false)}
+        />
+      )}
+
       {seatTable && (
         <Modal title={`Seat table ${seatTable.name}`} onClose={() => setSeatTable(null)}>
           <label>Guests</label>
@@ -169,6 +180,129 @@ export default function Tables() {
         </Modal>
       )}
     </div>
+  );
+}
+
+/**
+ * Create and edit tables (manager). New tables start off the floor plan —
+ * place them with "Edit layout". Zones are created simply by typing a new
+ * zone name. Deactivating hides a table everywhere; blocked while it has an
+ * open bill.
+ */
+function ManageTables({
+  tables,
+  zones,
+  onChanged,
+  onClose,
+}: {
+  tables: DiningTable[];
+  zones: string[];
+  onChanged: () => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState({ name: '', zone: zones[0] ?? 'Main', seats: 2 });
+  const [rows, setRows] = useState(() =>
+    tables.map((t) => ({ id: t.id, name: t.name, zone: t.zone, seats: t.seats, occupied: !!t.order_id })),
+  );
+  const [error, setError] = useState('');
+  const [msg, setMsg] = useState('');
+
+  const run = async (fn: () => Promise<void>, done: string) => {
+    setError('');
+    setMsg('');
+    try {
+      await fn();
+      onChanged();
+      setMsg(done);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    }
+  };
+
+  const add = () =>
+    run(async () => {
+      if (!form.name.trim()) throw new Error('Table name required');
+      await api.post('/api/tables', { name: form.name.trim(), zone: form.zone.trim() || 'Main', seats: form.seats });
+      setForm({ ...form, name: '' });
+    }, `Added — place it on the floor with "Edit layout"`);
+
+  const saveRow = (r: (typeof rows)[0]) =>
+    run(async () => {
+      await api.patch(`/api/tables/${r.id}`, { name: r.name, zone: r.zone, seats: r.seats });
+    }, `${r.name} saved`);
+
+  const deactivate = (r: (typeof rows)[0]) =>
+    run(async () => {
+      await api.patch(`/api/tables/${r.id}`, { active: false });
+      setRows((prev) => prev.filter((x) => x.id !== r.id));
+    }, `${r.name} removed`);
+
+  const patchRow = (id: number, patch: Partial<(typeof rows)[0]>) =>
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  return (
+    <Modal title="Manage tables" onClose={onClose}>
+      <label>New table</label>
+      <div className="row wrap mb">
+        <input
+          placeholder="Name (e.g. T9)"
+          value={form.name}
+          style={{ width: 110 }}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+        />
+        <input
+          placeholder="Zone"
+          list="zone-names"
+          value={form.zone}
+          style={{ width: 130 }}
+          onChange={(e) => setForm({ ...form, zone: e.target.value })}
+        />
+        <datalist id="zone-names">
+          {zones.map((z) => <option key={z} value={z} />)}
+        </datalist>
+        <input
+          type="number"
+          min={1}
+          title="Seats"
+          value={form.seats}
+          style={{ width: 70 }}
+          onChange={(e) => setForm({ ...form, seats: Math.max(1, Number(e.target.value) || 1) })}
+        />
+        <button className="primary" onClick={add}>Add</button>
+      </div>
+      <div className="muted small mb">
+        Type a new zone name to create a zone. New tables appear under "Not on the floor plan" —
+        drag them into place with Edit layout, then print their QR code from the QR codes page.
+      </div>
+      {msg && <div className="mb" style={{ color: 'var(--accent)' }}>{msg}</div>}
+      {error && <div className="error-text mb">{error}</div>}
+      <label>Existing tables</label>
+      <div style={{ maxHeight: '45vh', overflowY: 'auto' }}>
+        {rows.map((r) => (
+          <div className="row wrap" key={r.id} style={{ marginBottom: '0.35rem' }}>
+            <input value={r.name} style={{ width: 90 }} onChange={(e) => patchRow(r.id, { name: e.target.value })} />
+            <input value={r.zone} list="zone-names" style={{ width: 120 }} onChange={(e) => patchRow(r.id, { zone: e.target.value })} />
+            <input
+              type="number"
+              min={1}
+              value={r.seats}
+              style={{ width: 65 }}
+              title="Seats"
+              onChange={(e) => patchRow(r.id, { seats: Math.max(1, Number(e.target.value) || 1) })}
+            />
+            <button onClick={() => saveRow(r)}>Save</button>
+            <button
+              className="ghost"
+              disabled={r.occupied}
+              title={r.occupied ? 'Settle its open bill first' : 'Remove this table'}
+              onClick={() => deactivate(r)}
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+    </Modal>
   );
 }
 
