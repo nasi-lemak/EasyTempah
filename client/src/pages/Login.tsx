@@ -79,7 +79,7 @@ export default function Login() {
         ⏱ Clock in / out
       </button>
       {clockMsg && <div style={{ color: 'var(--accent)', fontWeight: 700 }}>{clockMsg}</div>}
-      {error && <div className="error-text">{error}</div>}
+      {error && <div className="error-text" role="alert">{error}</div>}
     </div>
   );
 }

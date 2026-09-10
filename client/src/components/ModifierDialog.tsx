@@ -117,7 +117,7 @@ export default function ModifierDialog({
           Add · {money(qty * (item.price_cents + extra))}
         </button>
       </div>
-      {error && <div className="error-text mt">{error}</div>}
+      {error && <div className="error-text mt" role="alert">{error}</div>}
     </Modal>
   );
 }

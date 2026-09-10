@@ -100,7 +100,7 @@ export default function ComboDialog({
           Add · {money(qty * (item.price_cents + surcharge))}
         </button>
       </div>
-      {error && <div className="error-text mt">{error}</div>}
+      {error && <div className="error-text mt" role="alert">{error}</div>}
     </Modal>
   );
 }

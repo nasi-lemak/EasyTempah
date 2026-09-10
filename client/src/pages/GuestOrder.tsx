@@ -86,6 +86,8 @@ export default function GuestOrder() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [fatal, setFatal] = useState('');
+  // Announced to screen readers whenever the cart changes or an order is sent.
+  const [liveMsg, setLiveMsg] = useState('');
 
   const loadTab = useCallback(() => {
     guestGet<{ order: GuestTab | null }>(`/api/guest/${token}/order`)
@@ -131,6 +133,7 @@ export default function GuestOrder() {
       },
     ]);
     setModItem(null);
+    setLiveMsg(`${choice.qty} × ${choice.item.name} added to your order`);
   };
 
   const addComboToCart = (choice: ComboChoice) => {
@@ -155,6 +158,7 @@ export default function GuestOrder() {
       },
     ]);
     setComboItem(null);
+    setLiveMsg(`${choice.qty} × ${choice.item.name} added to your order`);
   };
 
   const tapItem = (item: Item) => {
@@ -190,6 +194,7 @@ export default function GuestOrder() {
       setCart([]);
       setShowReview(false);
       setSent(true);
+      setLiveMsg('Order sent to the kitchen');
       loadTab();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Order failed');
@@ -224,10 +229,13 @@ export default function GuestOrder() {
         )}
       </header>
 
+      {/* Screen-reader announcements for cart changes and sent orders. */}
+      <div className="sr-only" aria-live="polite">{liveMsg}</div>
+
       {sent && (
-        <div className="guest-sent" onClick={() => setSent(false)}>
+        <button className="guest-sent" onClick={() => setSent(false)}>
           ✅ Order sent to the kitchen! Add more below, or view your tab. Pay at the counter when you're done.
-        </div>
+        </button>
       )}
 
       <div className="row mb" style={{ gap: '0.5rem' }}>
@@ -260,17 +268,17 @@ export default function GuestOrder() {
                 {oos && <div className="small" style={{ color: 'var(--danger)' }}>Sold out</div>}
               </span>
               <span className="price">{money(item.price_cents)}</span>
-              <span className="add">＋</span>
+              <span className="add" aria-hidden="true">＋</span>
             </button>
           );
         })}
       </div>
 
       {cart.length > 0 && (
-        <div className="guest-cartbar" onClick={() => setShowReview(true)}>
+        <button className="guest-cartbar" onClick={() => setShowReview(true)}>
           <span>{cartCount} item{cartCount === 1 ? '' : 's'}</span>
           <span>Review & send · {money(cartTotal)}</span>
-        </div>
+        </button>
       )}
 
       {modItem && info && (
@@ -288,7 +296,11 @@ export default function GuestOrder() {
                 <span className="grow"><strong>{l.qty}×</strong> {l.item.name}</span>
                 <span className="mono">{money(l.qty * (l.item.price_cents + l.modDelta))}</span>
                 <button className="ghost small" style={{ color: 'var(--danger)' }}
-                  onClick={() => setCart((c) => c.filter((x) => x.key !== l.key))}>
+                  aria-label={`Remove ${l.item.name}`}
+                  onClick={() => {
+                    setCart((c) => c.filter((x) => x.key !== l.key));
+                    setLiveMsg(`${l.item.name} removed from your order`);
+                  }}>
                   ✕
                 </button>
               </div>
@@ -306,7 +318,7 @@ export default function GuestOrder() {
           <button className="primary" style={{ width: '100%' }} onClick={submit} disabled={busy}>
             {busy ? 'Sending…' : 'Send to kitchen'}
           </button>
-          {error && <div className="error-text mt">{error}</div>}
+          {error && <div className="error-text mt" role="alert">{error}</div>}
         </Modal>
       )}
 
