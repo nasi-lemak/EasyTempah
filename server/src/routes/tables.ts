@@ -30,7 +30,13 @@ tablesRouter.get('/', (_req, res) => {
         (SELECT sc.reason FROM service_calls sc WHERE sc.table_id = t.id AND sc.acked_at IS NULL
           ORDER BY sc.id DESC LIMIT 1) AS call_reason,
         (SELECT sc.created_at FROM service_calls sc WHERE sc.table_id = t.id AND sc.acked_at IS NULL
-          ORDER BY sc.id DESC LIMIT 1) AS call_at
+          ORDER BY sc.id DESC LIMIT 1) AS call_at,
+        (SELECT r.name FROM reservations r WHERE r.table_id = t.id AND r.status = 'booked'
+          AND r.reserved_at BETWEEN datetime('now', 'localtime', '-30 minutes') AND datetime('now', 'localtime', '+2 hours')
+          ORDER BY r.reserved_at LIMIT 1) AS reservation_name,
+        (SELECT r.reserved_at FROM reservations r WHERE r.table_id = t.id AND r.status = 'booked'
+          AND r.reserved_at BETWEEN datetime('now', 'localtime', '-30 minutes') AND datetime('now', 'localtime', '+2 hours')
+          ORDER BY r.reserved_at LIMIT 1) AS reservation_at
        FROM dining_tables t
        WHERE t.active = 1
        ORDER BY t.zone, t.name`,

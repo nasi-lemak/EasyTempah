@@ -115,6 +115,23 @@ export interface DiningTable {
   ready_lines: number | null;
   call_reason: 'service' | 'bill' | null; // unacknowledged guest call-waiter request
   call_at: string | null;
+  reservation_name: string | null; // upcoming booking on this table (±30min/+2h window)
+  reservation_at: string | null;
+}
+
+export interface Reservation {
+  id: number;
+  name: string;
+  phone: string | null;
+  party_size: number;
+  reserved_at: string; // local "YYYY-MM-DD HH:MM:SS"
+  table_id: number | null;
+  table_name?: string | null;
+  table_zone?: string | null;
+  status: 'booked' | 'seated' | 'cancelled' | 'no_show';
+  notes: string | null;
+  customer_id: number | null;
+  seated_order_id: number | null;
 }
 
 export interface ModifierSnapshot {

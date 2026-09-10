@@ -1,6 +1,6 @@
 import type { Response } from 'express';
 
-export type Channel = 'orders' | 'tables' | 'kds' | 'menu' | 'shifts' | 'inventory';
+export type Channel = 'orders' | 'tables' | 'kds' | 'menu' | 'shifts' | 'inventory' | 'reservations';
 
 interface Client {
   id: number;

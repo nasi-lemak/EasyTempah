@@ -403,3 +403,21 @@ and deliberately deferred: browsers cannot reliably *encode* AVIF in canvas,
 and server-side encoding would add a native codec dependency for ~10 KB per
 image on a ~1 MB total menu — the schema stores any mime, so it can be
 revisited without migration.
+
+## Reservations
+
+`reservations` (migration v16) records name/phone/party/time (stored as local
+wall-clock text, matching how staff enter it), an optional table, notes, and a
+status lifecycle `booked → seated | cancelled | no_show` (the latter two
+restorable). Creating or editing a booking resolves the phone against
+`customers`, so a member's booking carries `customer_id`; the seat endpoint
+(`POST /api/reservations/:id/seat`) opens a dine-in order with the party's
+cover count on the booked (or chosen) table — refusing tables with an open
+bill — links the order back to the booking, and best-effort attaches the
+member to the bill so points flow without re-asking for the phone. The tables
+endpoint exposes each table's next booked reservation in a −30min/+2h window
+(`reservation_name`/`reservation_at`) for the floor plan's 📅 marker.
+Realtime rides a dedicated `reservations` SSE channel plus the existing
+`tables` channel. No public self-booking page: bookings are staff-entered by
+design (phone/WhatsApp remains the booking channel; a public page would need
+spam and double-booking controls that a counter workflow doesn't).

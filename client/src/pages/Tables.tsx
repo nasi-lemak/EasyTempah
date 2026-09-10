@@ -434,6 +434,10 @@ function FloorPlan({
                   </span>
                   <span className="amt">{money(t.total_cents)}</span>
                 </>
+              ) : t.reservation_name ? (
+                <span className="sub" title={`Reserved for ${t.reservation_name}`}>
+                  📅 {new Date(t.reservation_at!.replace(' ', 'T')).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
               ) : (
                 <span className="sub">{t.seats} seats</span>
               )}

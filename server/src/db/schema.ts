@@ -465,6 +465,25 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_time_clock_user ON time_clock(user_id);
   `,
+  // v16 — table reservations
+  `
+  CREATE TABLE reservations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    phone TEXT,
+    party_size INTEGER NOT NULL CHECK (party_size >= 1 AND party_size <= 100),
+    reserved_at TEXT NOT NULL,
+    table_id INTEGER REFERENCES dining_tables(id),
+    status TEXT NOT NULL DEFAULT 'booked' CHECK (status IN ('booked','seated','cancelled','no_show')),
+    notes TEXT,
+    customer_id INTEGER REFERENCES customers(id),
+    seated_order_id INTEGER REFERENCES orders(id),
+    created_by INTEGER REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX idx_reservations_when ON reservations(reserved_at);
+  CREATE INDEX idx_reservations_table ON reservations(table_id) WHERE status = 'booked';
+  `,
 ];
 
 export function applySchema(db: Database): void {

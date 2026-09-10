@@ -16,6 +16,7 @@ import Users from './pages/Users';
 import SettingsPage from './pages/Settings';
 import GuestOrder from './pages/GuestOrder';
 import TableQr from './pages/TableQr';
+import Bookings from './pages/Bookings';
 import Customers from './pages/Customers';
 import Einvoices from './pages/Einvoices';
 import PaymentQr from './pages/PaymentQr';
@@ -66,6 +67,7 @@ function Sidebar() {
       <div className="brand">EasyTempah</div>
       {canSell && <NavLink to="/pos">POS</NavLink>}
       {canSell && <NavLink to="/tables">Tables</NavLink>}
+      {canSell && <NavLink to="/bookings">Bookings</NavLink>}
       <NavLink to="/kds">Kitchen</NavLink>
       {canSell && <NavLink to="/orders">Orders</NavLink>}
       {canSell && <NavLink to="/shift">Shift</NavLink>}
@@ -138,6 +140,7 @@ export default function App() {
           <Route path="/pos" element={<Pos />} />
           <Route path="/pos/:orderId" element={<Pos />} />
           <Route path="/tables" element={<Tables />} />
+          <Route path="/bookings" element={<Bookings />} />
           <Route path="/kds" element={<Kds />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/shift" element={<ShiftPage />} />

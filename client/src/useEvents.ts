@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useStore } from './store';
 
-type Channel = 'orders' | 'tables' | 'kds' | 'menu' | 'shifts' | 'inventory';
+type Channel = 'orders' | 'tables' | 'kds' | 'menu' | 'shifts' | 'inventory' | 'reservations';
 
 /**
  * Subscribe to server-sent events; invokes the callback when any of the given

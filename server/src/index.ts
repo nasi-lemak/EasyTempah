@@ -17,6 +17,7 @@ import { ordersRouter } from './routes/orders';
 import { paymentsRouter, webhookRouter } from './routes/payments';
 import { printRouter } from './routes/print';
 import { promotionsRouter } from './routes/promotions';
+import { reservationsRouter } from './routes/reservations';
 import { reportsRouter } from './routes/reports';
 import { settingsRouter } from './routes/settings';
 import { shiftsRouter } from './routes/shifts';
@@ -46,6 +47,7 @@ app.use('/api/einvoice', einvoiceRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/customers', customersRouter);
 app.use('/api/promotions', promotionsRouter);
+app.use('/api/reservations', reservationsRouter);
 
 // Server-Sent Events stream for realtime updates.
 app.get('/api/events', requireAuth, (req, res) => {

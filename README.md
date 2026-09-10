@@ -8,6 +8,7 @@ kitchen displays and the back office, all over the local network.
 ## Features
 
 **Front of house**
+- Table bookings: a per-day timeline (name, phone, pax, time, table, notes) with one-tap seating that opens the bill with the right cover count and auto-attaches the guest's loyalty membership by phone; no-show/cancel tracking with restore, and 📅 markers on the floor plan so walk-ins don't take a booked table
 - Dine-in with a live spatial floor plan (tables positioned per zone, square/round shapes, occupancy, running totals, cooking / food-ready indicators) plus a grid fallback view; managers arrange the floor with a drag-and-drop layout editor
 - Takeaway and delivery orders, including delivery-platform orders (GrabFood / foodpanda / ShopeeFood): re-keyed from the merchant tablet with the platform's order number, settled one-tap at menu value under the platform's name, excluded from the merchant's consolidated e-invoice (the platform issues those), and reported per platform with gross vs. estimated net payout from configurable commission rates
 - Menu with categories and item modifiers (required/optional groups, priced add-ons, kitchen notes)
