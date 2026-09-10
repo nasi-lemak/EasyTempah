@@ -14,6 +14,7 @@ import MenuAdmin from './pages/MenuAdmin';
 import Inventory from './pages/Inventory';
 import Users from './pages/Users';
 import SettingsPage from './pages/Settings';
+import Board from './pages/Board';
 import GuestOrder from './pages/GuestOrder';
 import TableQr from './pages/TableQr';
 import Bookings from './pages/Bookings';
@@ -175,11 +176,18 @@ export default function App() {
       });
   }, [token, setSettings]);
 
-  // Guest QR ordering is public and renders without the staff shell.
+  // Guest QR ordering and the collection board are public — no staff shell.
   if (location.pathname.startsWith('/order/')) {
     return (
       <Routes>
         <Route path="/order/:token" element={<GuestOrder />} />
+      </Routes>
+    );
+  }
+  if (location.pathname === '/board') {
+    return (
+      <Routes>
+        <Route path="/board" element={<Board />} />
       </Routes>
     );
   }

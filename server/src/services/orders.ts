@@ -720,9 +720,15 @@ export const addPayment = db.transaction(
       db.prepare(
         `UPDATE orders SET status = 'paid', closed_at = datetime('now') WHERE id = ?`,
       ).run(orderId);
-      db.prepare(
-        `UPDATE order_items SET status = 'served' WHERE order_id = ? AND status NOT IN ('cancelled','served')`,
-      ).run(orderId);
+      // Dine-in settles after the meal, so payment tidies every line to
+      // served. Counter orders (takeaway/delivery) are often PAID FIRST —
+      // their lines keep cooking on the KDS and the collection board until
+      // the pass taps Serve at handover.
+      if (order.type === 'dine_in') {
+        db.prepare(
+          `UPDATE order_items SET status = 'served' WHERE order_id = ? AND status NOT IN ('cancelled','served')`,
+        ).run(orderId);
+      }
       assignReceiptSerial(orderId);
       earnLoyaltyPoints(orderId, userId);
     }

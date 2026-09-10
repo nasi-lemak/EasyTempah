@@ -434,6 +434,31 @@ button.guest-sent:hover:not(:disabled) { background: color-mix(in srgb, var(--ac
 button.guest-cartbar { border: none; }
 button.guest-cartbar:hover:not(:disabled) { background: var(--accent-dark); }
 
+/* ---------- collection board (TV at the counter) ---------- */
+.board {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  padding: 1.2rem 1.6rem;
+  display: flex;
+  flex-direction: column;
+}
+.board-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.board-head h1 { font-size: 2rem; margin: 0; }
+.board-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; flex: 1; }
+.board-cols section { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 14px; padding: 1rem 1.2rem; }
+.board-cols h2 { font-size: 1.6rem; margin: 0 0 0.8rem; }
+.board-cols .ready-col { border-color: var(--accent); }
+.board-cols .ready-col h2 { color: var(--accent); }
+.board-nums { display: flex; flex-wrap: wrap; gap: 0.8rem; align-content: flex-start; }
+.board-num {
+  font-size: 3.2rem; font-weight: 800; font-variant-numeric: tabular-nums;
+  background: var(--bg-raised); border: 1px solid var(--border); border-radius: 12px;
+  padding: 0.3rem 1rem; min-width: 4.5rem; text-align: center;
+}
+.board-num.ready { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+@media (max-width: 700px) { .board-cols { grid-template-columns: 1fr; } .board-num { font-size: 2.2rem; } }
+
 /* ---------- QR print sheet ---------- */
 .qr-sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.8rem; }
 .qr-card {

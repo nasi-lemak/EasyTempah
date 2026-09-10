@@ -23,7 +23,7 @@ kdsRouter.get('/tickets', (req, res) => {
        FROM order_items oi
        JOIN orders o ON o.id = oi.order_id
        LEFT JOIN dining_tables t ON t.id = o.table_id
-       WHERE o.status = 'open' AND oi.status IN ('sent','preparing','ready') ${stationFilter}
+       WHERE o.status != 'void' AND oi.status IN ('sent','preparing','ready') ${stationFilter}
          AND NOT EXISTS (SELECT 1 FROM order_items c WHERE c.parent_line_id = oi.id)
        ORDER BY oi.sent_at, oi.id`,
     )
@@ -71,7 +71,7 @@ kdsRouter.get('/recent', (_req, res) => {
        FROM order_items oi
        JOIN orders o ON o.id = oi.order_id
        LEFT JOIN dining_tables t ON t.id = o.table_id
-       WHERE o.status = 'open' AND oi.status = 'served'
+       WHERE o.status != 'void' AND oi.status = 'served'
          AND NOT EXISTS (SELECT 1 FROM order_items c WHERE c.parent_line_id = oi.id)
        ORDER BY oi.id DESC LIMIT 20`,
     )
