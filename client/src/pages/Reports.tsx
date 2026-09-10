@@ -30,6 +30,7 @@ interface Summary {
 interface PaymentRow { method: string; payments: number; total_cents: number }
 interface HourRow { hour: string; orders: number; total_cents: number }
 interface DayRow { day: string; orders: number; total_cents: number }
+interface HeatCell { dow: number; hour: number; orders: number; total_cents: number }
 interface MenuPerfRow {
   item_id: number | null;
   name: string;
@@ -65,6 +66,7 @@ export default function Reports() {
   const [menuPerf, setMenuPerf] = useState<MenuPerfRow[]>([]);
   const [days, setDays] = useState<DayRow[]>([]);
   const [prevDays, setPrevDays] = useState<DayRow[]>([]);
+  const [heat, setHeat] = useState<HeatCell[]>([]);
   const [error, setError] = useState('');
   const token = useStore((s) => s.token);
 
@@ -78,6 +80,7 @@ export default function Reports() {
       api.get<{ cashiers: CashierRow[] }>(`/api/reports/cashiers${q}`),
       api.get<{ staff: typeof staffHours }>(`/api/reports/hours${q}`),
       api.get<{ items: MenuPerfRow[] }>(`/api/reports/menu${q}`),
+      api.get<{ cells: HeatCell[] }>(`/api/reports/heatmap${q}`),
       api.get<{ days: DayRow[] }>(`/api/reports/daily${q}`),
       (() => {
         // Previous window of equal length, for the trend overlay.
@@ -87,13 +90,14 @@ export default function Reports() {
         return api.get<{ days: DayRow[] }>(`/api/reports/daily?from=${pFrom}&to=${pTo}`);
       })(),
     ])
-      .then(([s, p, h, c, sh, mp, d, pd]) => {
+      .then(([s, p, h, c, sh, mp, hm, d, pd]) => {
         setSummary(s);
         setPayments(p.payments);
         setHours(h.hours);
         setCashiers(c.cashiers);
         setStaffHours(sh.staff);
         setMenuPerf(mp.items);
+        setHeat(hm.cells);
         setDays(d.days);
         setPrevDays(pd.days);
       })
@@ -283,6 +287,7 @@ export default function Reports() {
       )}
 
       <DailyTrend from={from} to={to} days={days} prevDays={prevDays} money={money} />
+      <WeekHeatmap cells={heat} money={money} />
       <MenuPerformance rows={menuPerf} money={money} />
     </div>
   );
@@ -486,6 +491,67 @@ function MenuPerformance({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** Weekday × hour revenue heatmap: where the rushes really are, for staffing. */
+function WeekHeatmap({ cells, money }: { cells: HeatCell[]; money: (c: number | null | undefined) => string }) {
+  if (cells.length === 0) return null;
+  const hoursPresent = cells.map((c) => c.hour);
+  const hLo = Math.min(...hoursPresent);
+  const hHi = Math.max(...hoursPresent);
+  const hourRange = Array.from({ length: hHi - hLo + 1 }, (_, i) => hLo + i);
+  // Monday-first rows; SQLite %w has Sunday = 0.
+  const DOW = [1, 2, 3, 4, 5, 6, 0];
+  const DOW_LABEL = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const byKey = new Map(cells.map((c) => [`${c.dow}:${c.hour}`, c]));
+  const max = Math.max(1, ...cells.map((c) => c.total_cents));
+
+  return (
+    <div className="panel mt">
+      <div className="row wrap">
+        <h2 className="grow">When the rush hits</h2>
+        <span className="muted small">
+          quiet
+          <span style={{ display: 'inline-block', width: 90, height: 10, margin: '0 6px', borderRadius: 5, verticalAlign: 'middle', background: 'linear-gradient(90deg, color-mix(in srgb, var(--accent) 8%, transparent), var(--accent))' }} />
+          busy (peak {money(max)}/hr)
+        </span>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ borderCollapse: 'separate', borderSpacing: 2 }}>
+          <thead>
+            <tr>
+              <th></th>
+              {hourRange.map((h) => (
+                <th key={h} className="muted small" style={{ fontWeight: 400, padding: '0 2px' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {DOW.map((d, i) => (
+              <tr key={d}>
+                <td className="muted small" style={{ paddingRight: 6 }}>{DOW_LABEL[i]}</td>
+                {hourRange.map((h) => {
+                  const c = byKey.get(`${d}:${h}`);
+                  const pct = c ? Math.max(8, Math.round((c.total_cents / max) * 100)) : 0;
+                  return (
+                    <td
+                      key={h}
+                      title={c ? `${DOW_LABEL[i]} ${h}:00 — ${money(c.total_cents)} · ${c.orders} orders` : `${DOW_LABEL[i]} ${h}:00 — no sales`}
+                      style={{
+                        width: 30, height: 24, borderRadius: 4,
+                        background: c ? `color-mix(in srgb, var(--accent) ${pct}%, transparent)` : 'var(--bg-raised)',
+                      }}
+                    />
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted small">Hover a cell for the exact figure. Use a multi-week range so each weekday has several samples.</p>
     </div>
   );
 }

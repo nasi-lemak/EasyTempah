@@ -18,6 +18,7 @@ import GuestOrder from './pages/GuestOrder';
 import TableQr from './pages/TableQr';
 import Bookings from './pages/Bookings';
 import Customers from './pages/Customers';
+import Today from './pages/Today';
 import Einvoices from './pages/Einvoices';
 import PaymentQr from './pages/PaymentQr';
 
@@ -128,6 +129,7 @@ function Sidebar() {
       <NavLink to="/kds">Kitchen</NavLink>
       {canSell && <NavLink to="/orders">Orders</NavLink>}
       {canSell && <NavLink to="/shift">Shift</NavLink>}
+      {isManager && <NavLink to="/today">Today</NavLink>}
       {isManager && <NavLink to="/reports">Reports</NavLink>}
       {isManager && <NavLink to="/menu-admin">Menu</NavLink>}
       {isManager && <NavLink to="/inventory">Inventory</NavLink>}
@@ -208,6 +210,7 @@ export default function App() {
           <Route path="/kds" element={<Kds />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/shift" element={<ShiftPage />} />
+          <Route path="/today" element={<Today />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/menu-admin" element={<MenuAdmin />} />
           <Route path="/inventory" element={<Inventory />} />

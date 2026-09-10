@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../db/connection';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { badRequest } from '../middleware/errors';
+import { clockFor, promoMatches } from '../services/promotions';
 import { getPlatformsSettings } from '../services/settings';
 
 export const reportsRouter = Router();
@@ -220,6 +221,88 @@ reportsRouter.get('/menu', (req, res) => {
       }))
       .sort((a, b) => b.qty - a.qty),
   });
+});
+
+/**
+ * The owner's "Today" snapshot: sales so far vs the same weekday last week
+ * up to the same clock time, what's live on the floor right now, today's top
+ * sellers, upcoming bookings, low stock, and currently-running promotions.
+ */
+reportsRouter.get('/today', (_req, res) => {
+  const salesUpTo = (dayExpr: string) =>
+    db
+      .prepare(
+        `SELECT COUNT(*) AS orders, COALESCE(SUM(total_cents), 0) AS gross_cents,
+                COALESCE(SUM(covers), 0) AS covers
+         FROM orders WHERE status = 'paid'
+           AND date(closed_at, 'localtime') = date('now', 'localtime'${dayExpr})
+           AND time(closed_at, 'localtime') <= time('now', 'localtime')`,
+      )
+      .get() as { orders: number; gross_cents: number; covers: number };
+
+  const today = salesUpTo('');
+  const lastWeek = salesUpTo(", '-7 days'");
+
+  const live = db
+    .prepare(
+      `SELECT COUNT(*) AS open_orders, COALESCE(SUM(total_cents), 0) AS open_cents,
+        (SELECT COUNT(DISTINCT table_id) FROM orders WHERE status = 'open' AND table_id IS NOT NULL) AS occupied_tables
+       FROM orders WHERE status = 'open'`,
+    )
+    .get() as { open_orders: number; open_cents: number; occupied_tables: number };
+
+  const topItems = db
+    .prepare(
+      `SELECT oi.name, SUM(oi.qty) AS qty FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       WHERE o.status = 'paid' AND date(o.closed_at, 'localtime') = date('now', 'localtime')
+         AND oi.status != 'cancelled' AND oi.parent_line_id IS NULL
+       GROUP BY oi.name ORDER BY qty DESC LIMIT 5`,
+    )
+    .all();
+
+  const bookings = db
+    .prepare(
+      `SELECT r.id, r.name, r.party_size, r.reserved_at, t.name AS table_name
+       FROM reservations r LEFT JOIN dining_tables t ON t.id = r.table_id
+       WHERE r.status = 'booked' AND date(r.reserved_at) = date('now', 'localtime')
+         AND r.reserved_at >= datetime('now', 'localtime', '-30 minutes')
+       ORDER BY r.reserved_at LIMIT 5`,
+    )
+    .all();
+
+  const lowItems = db
+    .prepare(
+      'SELECT name, stock_qty, low_stock_threshold FROM items WHERE active = 1 AND track_stock = 1 AND stock_qty <= low_stock_threshold ORDER BY stock_qty LIMIT 8',
+    )
+    .all();
+  const lowIngredients = db
+    .prepare(
+      'SELECT name, stock_qty, low_stock_threshold, unit FROM ingredients WHERE active = 1 AND stock_qty <= low_stock_threshold ORDER BY stock_qty LIMIT 8',
+    )
+    .all();
+
+  const clock = clockFor(new Date());
+  const promos = (db.prepare('SELECT * FROM promotions WHERE active = 1').all() as import('../types').Promotion[])
+    .filter((p) => promoMatches(p, 'dine_in', clock) || promoMatches(p, 'takeaway', clock) || promoMatches(p, 'delivery', clock))
+    .map((p) => p.name);
+
+  res.json({ today, last_week: lastWeek, live, top_items: topItems, bookings, low_items: lowItems, low_ingredients: lowIngredients, active_promos: promos });
+});
+
+/** Orders and revenue bucketed by weekday × hour, for the staffing heatmap. */
+reportsRouter.get('/heatmap', (req, res) => {
+  const { from, to } = dateRange(req);
+  const rows = db
+    .prepare(
+      `SELECT CAST(strftime('%w', closed_at, 'localtime') AS INTEGER) AS dow,
+              CAST(strftime('%H', closed_at, 'localtime') AS INTEGER) AS hour,
+              COUNT(*) AS orders, SUM(total_cents) AS total_cents
+       FROM orders WHERE status = 'paid' AND date(closed_at, 'localtime') BETWEEN ? AND ?
+       GROUP BY dow, hour`,
+    )
+    .all(from, to);
+  res.json({ from, to, cells: rows });
 });
 
 /** Staff hours from the time clock. Entries still open count up to "now". */

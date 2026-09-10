@@ -439,3 +439,18 @@ days, `/api/reports/daily` called for both windows). Charts are hand-rolled
 SVG on the app's theme tokens — single-hue marks plus a neutral dashed
 comparison series, so identity never rides on hue alone and the admin-set
 brand accent restyles them automatically.
+
+## Today dashboard & rush heatmap
+
+`GET /api/reports/today` returns one snapshot: paid sales today up to the
+current clock time and the same weekday last week up to the same time (an
+honest mid-day comparison, not full-day-vs-partial-day), live open bills and
+occupied tables, today's top five items, the next booked reservations, items
+and ingredients at or under their thresholds, and the promotions currently
+matching the clock (via the same `promoMatches` used at the till). The Today
+page renders it as cards that refresh over the existing SSE channels, and the
+Customise mode hides cards per terminal (localStorage) — deliberately
+per-device, not a server-side widget builder. `GET /api/reports/heatmap`
+buckets paid orders by weekday × hour (localtime) for the "when the rush
+hits" grid, drawn as accent-alpha cells (single-hue sequential) with per-cell
+tooltips.

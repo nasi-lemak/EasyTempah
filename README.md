@@ -44,6 +44,8 @@ kitchen displays and the back office, all over the local network.
 
 **Back office**
 - Order search across all days by order / receipt / platform number
+- Today dashboard for managers: sales so far vs the same weekday last week (up to the same clock time), live floor status, today's top sellers, upcoming bookings, low-stock alerts and running promotions — auto-refreshing, with per-terminal card customisation (hide/show, remembered per device)
+- "When the rush hits" heatmap: revenue by weekday × hour over any range, for rostering against the real peaks
 - Menu performance dashboard: item popularity with quantity bars and share of sales, Food/Drinks and category filters, trend chips vs the previous equal period (▲/▼/new), and a menu-engineering quadrant plotting popularity × gross margin from ingredient-recipe costs (Stars / Plowhorses / Puzzles / Dogs)
 - Daily sales trend chart with the previous equal-length period overlaid for honest week-over-week comparison
 - Sales reports: summary KPIs, hourly chart, payment mix, order-type split, per-staff attribution (orders opened, collected, refunds given — also on the live shift X-report), and one-click CSV exports (orders / items / payments) for the accountant
