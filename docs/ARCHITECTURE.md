@@ -289,3 +289,29 @@ npm start        # serves API + client on :4000
 Point each terminal's browser (POS lane, kitchen screen, manager laptop) at the
 server's LAN address. The SQLite file in `server/data/` is the entire state —
 back it up by copying the file.
+
+## Demo mode
+
+`npm run seed:demo` layers ~3 weeks of generated sales history on top of the
+base seed (`server/src/db/demo.ts`): closed shifts with drawer reconciliation,
+orders across dine-in/takeaway/delivery and the delivery platforms, a realistic
+payment-channel mix, occasional discounts and refunds, loyalty members earning
+and redeeming points, plus an open shift and a couple of live kitchen tickets
+for "today". The generator goes through the same totals math as the live code
+(`computeTotals` / `cashRoundingAdjustment`) so every generated order satisfies
+the app's invariants; it uses a fixed RNG seed, so the numbers are reproducible.
+
+Safety properties:
+
+- It refuses to run against a database holding sales it didn't generate itself
+  (guarded by the `demo` settings flag), so it can never contaminate a
+  production till.
+- While the flag is set, every signed-in screen shows a **DEMO DATA** badge
+  (hidden from receipt/QR printing).
+- `npm run seed:demo -- --reset` wipes only transactional history (orders,
+  payments, shifts, members, movements) and regenerates — menu, users, tables
+  and stock levels are left alone. Item/ingredient stock is deliberately not
+  back-consumed by the generated history: stock counts represent *now*.
+
+Going live from a demo install: reset once, then delete `server/data/` and run
+`npm run seed` for a clean database (the flag clears with the file).

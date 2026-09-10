@@ -7,6 +7,7 @@ import {
   DEFAULT_BUSINESS,
   DEFAULT_TAX,
   getBusinessSettings,
+  getDemoSettings,
   getEinvoiceSettings,
   getGatewaySettings,
   getLoyaltySettings,
@@ -48,6 +49,7 @@ function fullPayload() {
     gateway: maskedGateway(),
     platforms: getPlatformsSettings(),
     loyalty: getLoyaltySettings(),
+    demo: getDemoSettings(),
   };
 }
 

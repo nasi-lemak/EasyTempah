@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
   AuthUser,
   BusinessSettings,
+  DemoSettings,
   EinvoiceSettings,
   GatewaySettings,
   LoyaltySettings,
@@ -20,6 +21,7 @@ export interface SettingsBundle {
   gateway?: GatewaySettings;
   platforms?: PlatformsSettings;
   loyalty?: LoyaltySettings;
+  demo?: DemoSettings;
 }
 
 interface AppState {
@@ -33,6 +35,7 @@ interface AppState {
   gateway: GatewaySettings | null;
   platforms: PlatformsSettings | null;
   loyalty: LoyaltySettings | null;
+  demo: DemoSettings | null;
   setAuth: (token: string, user: AuthUser) => void;
   clearAuth: () => void;
   setSettings: (bundle: SettingsBundle) => void;
@@ -60,6 +63,7 @@ export const useStore = create<AppState>((set) => ({
   gateway: null,
   platforms: null,
   loyalty: null,
+  demo: null,
   setAuth: (token, user) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ token, user }));
     set({ token, user });
@@ -78,6 +82,7 @@ export const useStore = create<AppState>((set) => ({
       ...(bundle.gateway ? { gateway: bundle.gateway } : {}),
       ...(bundle.platforms ? { platforms: bundle.platforms } : {}),
       ...(bundle.loyalty ? { loyalty: bundle.loyalty } : {}),
+      ...(bundle.demo ? { demo: bundle.demo } : {}),
     }),
 }));
 

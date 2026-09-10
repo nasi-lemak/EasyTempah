@@ -144,6 +144,16 @@ export function getGatewaySettings(): GatewaySettings {
   return getSetting('gateway', DEFAULT_GATEWAY);
 }
 
+/** Set by `npm run seed:demo`; the UI shows a DEMO DATA badge while enabled. */
+export interface DemoSettings {
+  enabled: boolean;
+  generatedAt?: string;
+}
+
+export function getDemoSettings(): DemoSettings {
+  return getSetting('demo', { enabled: false });
+}
+
 export function getPrintersSettings(): PrintersSettings {
   const stored = getSetting('printers', DEFAULT_PRINTERS);
   // Deep-merge per printer so partial saves keep sane defaults.

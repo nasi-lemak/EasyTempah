@@ -19,6 +19,17 @@ import Customers from './pages/Customers';
 import Einvoices from './pages/Einvoices';
 import PaymentQr from './pages/PaymentQr';
 
+/** Floating reminder that every number on screen came from `npm run seed:demo`. */
+function DemoBadge() {
+  const demo = useStore((s) => s.demo);
+  if (!demo?.enabled) return null;
+  return (
+    <div className="demo-badge" title="Generated sample data — reset with: npm run seed:demo -- --reset">
+      DEMO DATA
+    </div>
+  );
+}
+
 function Sidebar() {
   const user = useStore((s) => s.user);
   const business = useStore((s) => s.business);
@@ -101,6 +112,7 @@ export default function App() {
 
   return (
     <div className="shell">
+      <DemoBadge />
       <Sidebar />
       <main className="main">
         <Routes>

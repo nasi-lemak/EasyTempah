@@ -418,3 +418,16 @@ table.data tr.clickable:hover td { background: var(--bg-raised); }
   body:has(.qr-sheet) .main { padding: 0; }
   .qr-card { border: 1px solid #ccc; }
 }
+
+/* ---------- demo-mode badge ---------- */
+.demo-badge {
+  position: fixed; right: 10px; bottom: 10px; z-index: 300;
+  background: #b45309; color: #fff;
+  border: 1px dashed rgba(255, 255, 255, 0.7);
+  border-radius: 8px; padding: 0.3rem 0.65rem;
+  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em;
+  pointer-events: none; opacity: 0.92;
+}
+@media print {
+  .demo-badge { display: none; }
+}

@@ -41,6 +41,7 @@ kitchen displays and the back office, all over the local network.
 - Users & roles (admin / manager / cashier / kitchen) with PIN sign-in
 - Business settings: identity, receipt footer, tax, service charge (per-order-type — dine-in only by default per MY/SG convention, fully toggleable), cash rounding, and one-click country presets (🇲🇾 RM/SST 6%, 🇸🇬 S$/GST 9%) — every value stays individually editable for other markets
 - Hardening & ops: PIN brute-force lockout (5 failures → 5-minute IP lock), manager-gated per-line price overrides, and automatic daily SQLite backups (14 kept) with a back-up-now button
+- Demo mode: `npm run seed:demo` generates weeks of realistic sales history (shifts, refunds, members, platform orders, live kitchen tickets) for showrooms and training, with a DEMO DATA badge on every screen, a production-database guard, and one-command reset
 - Audit log of sensitive actions (voids, discounts, shift events)
 
 **Under the hood** — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the
@@ -55,6 +56,14 @@ npm install
 npm run seed     # demo menu, tables and users
 npm run dev      # server on :4000, client dev server on :5173
 ```
+
+Want the full showroom experience? Use `npm run seed:demo` instead of
+`npm run seed`: it also generates ~3 weeks of realistic sales history —
+shifts, orders across all channels and platforms, refunds, loyalty members
+with points, plus live kitchen tickets — so Reports, Shift and Members look
+alive immediately. A **DEMO DATA** badge shows on every screen while the flag
+is set; it refuses to run on a database with real sales, and
+`npm run seed:demo -- --reset` wipes and regenerates the history.
 
 Sign in with a demo PIN:
 

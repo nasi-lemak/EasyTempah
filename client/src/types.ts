@@ -239,6 +239,12 @@ export interface LoyaltySettings {
   minRedeemPoints: number;
 }
 
+/** Set by `npm run seed:demo`; shows the DEMO DATA badge while enabled. */
+export interface DemoSettings {
+  enabled: boolean;
+  generatedAt?: string;
+}
+
 export interface DeliveryPlatform {
   key: string;
   label: string;
