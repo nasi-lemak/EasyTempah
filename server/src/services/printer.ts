@@ -8,8 +8,17 @@ import { db } from '../db/connection';
 import { ApiError } from '../middleware/errors';
 import { portalUrl } from './einvoice/client';
 import { renderKitchenTicket, renderReceipt, EscPos, type TicketLine } from './escpos';
+import { parseLogoDataUrl, pngToRaster } from './logo';
 import { getOrder } from './orders';
-import { getBusinessSettings, getEinvoiceSettings, getPrintersSettings, getTaxSettings } from './settings';
+import { makeLabels } from './receiptLang';
+import {
+  getBusinessSettings,
+  getEinvoiceSettings,
+  getLogoDataUrl,
+  getPrintersSettings,
+  getReceiptsSettings,
+  getTaxSettings,
+} from './settings';
 import type { OrderItemModifierSnapshot, PrinterTarget, Station } from '../types';
 
 const SEND_TIMEOUT_MS = 5000;
@@ -47,9 +56,22 @@ export async function printReceipt(orderId: number, opts: { drawer?: boolean } =
       portal_url: row.long_id ? portalUrl(getEinvoiceSettings().environment, row.uuid, row.long_id) : null,
     };
   }
+  const receipts = getReceiptsSettings();
+  let logo = null;
+  const logoUrl = getLogoDataUrl();
+  if (logoUrl) {
+    try {
+      logo = pngToRaster(parseLogoDataUrl(logoUrl));
+    } catch (err) {
+      console.error('Receipt logo could not be rasterized:', err instanceof Error ? err.message : err);
+    }
+  }
   const doc = renderReceipt(order, getBusinessSettings(), getTaxSettings(), {
     drawerKick: (opts.drawer ?? false) && printers.receipt.drawerKick,
     einvoice,
+    labels: makeLabels(receipts.langPrimary, receipts.langSecondary),
+    charset: printers.receipt.charset ?? 'ascii',
+    logo,
   });
   await sendToPrinter(printers.receipt, doc);
 }
@@ -87,6 +109,7 @@ export async function printKitchenTickets(orderId: number, lineIds: number[]): P
         where,
         order_notes: order.notes,
         lines,
+        charset: printers[station].charset ?? 'ascii',
       });
       await sendToPrinter(printers[station], doc);
     }

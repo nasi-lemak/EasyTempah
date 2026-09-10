@@ -3,18 +3,24 @@ import { AuthedRequest, requireAuth, requireRole } from '../middleware/auth';
 import { badRequest } from '../middleware/errors';
 import { audit } from '../services/audit';
 import { backupNow, listBackups } from '../services/backup';
+import { MAX_LOGO_BYTES, parseLogoDataUrl, pngToRaster } from '../services/logo';
+import { makeLabels, RECEIPT_LANGS } from '../services/receiptLang';
 import {
   DEFAULT_BUSINESS,
+  DEFAULT_RECEIPTS,
   DEFAULT_TAX,
   getBusinessSettings,
   getDemoSettings,
   getEinvoiceSettings,
   getGatewaySettings,
+  getLogoDataUrl,
   getLoyaltySettings,
   getPaymentsSettings,
   getPlatformsSettings,
   getPrintersSettings,
+  getReceiptsSettings,
   getTaxSettings,
+  setLogoDataUrl,
   setSetting,
 } from '../services/settings';
 import type {
@@ -25,6 +31,7 @@ import type {
   PaymentsSettings,
   PlatformsSettings,
   PrintersSettings,
+  ReceiptsSettings,
   TaxSettings,
 } from '../types';
 
@@ -40,6 +47,7 @@ function maskedGateway(): Omit<GatewaySettings, 'webhookSecret'> & { hasWebhookS
 }
 
 function fullPayload() {
+  const receipts = getReceiptsSettings();
   return {
     business: getBusinessSettings(),
     tax: getTaxSettings(),
@@ -49,6 +57,9 @@ function fullPayload() {
     gateway: maskedGateway(),
     platforms: getPlatformsSettings(),
     loyalty: getLoyaltySettings(),
+    // Labels computed server-side so screen and thermal receipts always agree.
+    receipts: { ...receipts, labels: makeLabels(receipts.langPrimary, receipts.langSecondary) },
+    logo: getLogoDataUrl(),
     demo: getDemoSettings(),
   };
 }
@@ -62,7 +73,7 @@ settingsRouter.get('/', (_req, res) => {
 });
 
 settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
-  const { business, tax, printers, payments, einvoice, gateway, platforms, loyalty } = req.body as {
+  const { business, tax, printers, payments, einvoice, gateway, platforms, loyalty, receipts } = req.body as {
     business?: Partial<BusinessSettings>;
     tax?: Partial<TaxSettings>;
     printers?: Partial<PrintersSettings>;
@@ -71,6 +82,7 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
     gateway?: Partial<GatewaySettings>;
     platforms?: Partial<PlatformsSettings>;
     loyalty?: Partial<LoyaltySettings>;
+    receipts?: Partial<ReceiptsSettings>;
   };
   if (business) {
     setSetting('business', { ...DEFAULT_BUSINESS, ...getBusinessSettings(), ...business });
@@ -103,6 +115,9 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
         throw badRequest('Printer port must be 1-65535');
       }
       if (target.enabled && !target.host.trim()) throw badRequest('Printer host required');
+      if (target.charset && !['ascii', 'gbk'].includes(target.charset)) {
+        throw badRequest('Printer charset must be ascii or gbk');
+      }
     }
     setSetting('printers', merged);
   }
@@ -174,7 +189,43 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
     }
     setSetting('loyalty', merged);
   }
+  if (receipts) {
+    const merged: ReceiptsSettings = { ...DEFAULT_RECEIPTS, ...getReceiptsSettings(), ...receipts };
+    if (!RECEIPT_LANGS.includes(merged.langPrimary)) throw badRequest('Unknown primary receipt language');
+    if (merged.langSecondary && !RECEIPT_LANGS.includes(merged.langSecondary)) {
+      throw badRequest('Unknown secondary receipt language');
+    }
+    if (merged.langSecondary === merged.langPrimary) merged.langSecondary = '';
+    if (merged.serialPrefix.length > 12) throw badRequest('Serial prefix must be 12 characters or fewer');
+    setSetting('receipts', merged);
+  }
   audit(req.user!.id, 'settings.update');
+  res.json(fullPayload());
+});
+
+/**
+ * Receipt logo upload: a small PNG as a data URL. Validated by actually
+ * decoding + rasterizing it, so a file the printer can't render is rejected
+ * up front rather than failing at print time.
+ */
+settingsRouter.put('/logo', requireRole('admin'), (req: AuthedRequest, res) => {
+  const { dataUrl } = req.body as { dataUrl?: string };
+  if (typeof dataUrl !== 'string' || dataUrl.length > MAX_LOGO_BYTES * 2) {
+    throw badRequest('dataUrl (PNG, max 200 KB) required');
+  }
+  try {
+    pngToRaster(parseLogoDataUrl(dataUrl));
+  } catch (err) {
+    throw badRequest(err instanceof Error ? err.message : 'Invalid PNG');
+  }
+  setLogoDataUrl(dataUrl);
+  audit(req.user!.id, 'settings.logo');
+  res.json(fullPayload());
+});
+
+settingsRouter.delete('/logo', requireRole('admin'), (req: AuthedRequest, res) => {
+  setLogoDataUrl('');
+  audit(req.user!.id, 'settings.logo.remove');
   res.json(fullPayload());
 });
 

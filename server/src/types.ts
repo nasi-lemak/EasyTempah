@@ -138,6 +138,7 @@ export interface Order {
   promo_id: number | null; // best matching scheduled promotion, applied automatically
   promo_name: string | null;
   promo_cents: number;
+  receipt_no: string | null; // sequential invoice serial, assigned when the bill settles
 }
 
 /** Scheduled automatic discount (e.g. happy hour). Times/dates are local wall clock. */
@@ -361,6 +362,8 @@ export interface PrinterTarget {
   enabled: boolean;
   host: string;
   port: number;
+  /** 'ascii' (default, safest) or 'gbk' for printers with Chinese firmware. */
+  charset?: 'ascii' | 'gbk';
 }
 
 export interface PrintersSettings {
@@ -378,4 +381,12 @@ export interface BusinessSettings {
   currency: string; // "MYR"
   currencySymbol: string; // "RM"
   receiptFooter: string;
+}
+
+/** Receipt localization + serial numbering, chosen to fit the business's audience. */
+export interface ReceiptsSettings {
+  langPrimary: 'en' | 'ms' | 'zh';
+  langSecondary: '' | 'en' | 'ms' | 'zh';
+  serialEnabled: boolean;
+  serialPrefix: string; // e.g. "INV-"
 }

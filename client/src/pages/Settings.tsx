@@ -9,6 +9,7 @@ import type {
   PaymentsSettings,
   PlatformsSettings,
   PrintersSettings,
+  ReceiptsSettings,
   TaxSettings,
 } from '../types';
 
@@ -21,7 +22,11 @@ type SettingsPayload = {
   gateway: GatewaySettings;
   platforms: PlatformsSettings;
   loyalty: LoyaltySettings;
+  receipts: ReceiptsSettings;
+  logo: string;
 };
+
+const LANG_NAMES: Record<string, string> = { en: 'English', ms: 'Bahasa Melayu', zh: '中文' };
 
 export default function SettingsPage() {
   const setSettings = useStore((s) => s.setSettings);
@@ -35,6 +40,8 @@ export default function SettingsPage() {
   const [gatewaySecret, setGatewaySecret] = useState('');
   const [platforms, setPlatforms] = useState<PlatformsSettings | null>(null);
   const [loyalty, setLoyalty] = useState<LoyaltySettings | null>(null);
+  const [receipts, setReceipts] = useState<ReceiptsSettings | null>(null);
+  const [logo, setLogo] = useState('');
   const [saved, setSaved] = useState(false);
   const [testMsg, setTestMsg] = useState('');
   const [backupMsg, setBackupMsg] = useState('');
@@ -63,11 +70,13 @@ export default function SettingsPage() {
         setGateway(r.gateway);
         setPlatforms(r.platforms);
         setLoyalty(r.loyalty);
+        setReceipts(r.receipts);
+        setLogo(r.logo ?? '');
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, []);
 
-  if (!business || !tax || !printers || !payments || !einvoice || !gateway || !platforms || !loyalty) {
+  if (!business || !tax || !printers || !payments || !einvoice || !gateway || !platforms || !loyalty || !receipts) {
     return <div className="muted">Loading…</div>;
   }
 
@@ -84,6 +93,7 @@ export default function SettingsPage() {
         gateway: { ...gateway, ...(gatewaySecret.trim() ? { webhookSecret: gatewaySecret.trim() } : {}) },
         platforms,
         loyalty,
+        receipts,
       });
       setBusiness(r.business);
       setTax(r.tax);
@@ -93,6 +103,8 @@ export default function SettingsPage() {
       setGateway(r.gateway);
       setPlatforms(r.platforms);
       setLoyalty(r.loyalty);
+      setReceipts(r.receipts);
+      setLogo(r.logo ?? '');
       setEinvoiceSecret('');
       setGatewaySecret('');
       setSettings(r);
@@ -124,6 +136,10 @@ export default function SettingsPage() {
         </button>
         <input value={t.host} onChange={(e) => patch({ host: e.target.value })} placeholder="IP address" style={{ width: 150 }} />
         <input type="number" value={t.port} onChange={(e) => patch({ port: Number(e.target.value) })} style={{ width: 90 }} />
+        <select value={t.charset ?? 'ascii'} onChange={(e) => patch({ charset: e.target.value as 'ascii' | 'gbk' })} title="Character set: GBK for printers with Chinese firmware">
+          <option value="ascii">ASCII</option>
+          <option value="gbk">GBK 中文</option>
+        </select>
         {key === 'receipt' && (
           <button className={printers.receipt.drawerKick ? 'primary' : ''}
             onClick={() => setPrinters({ ...printers, receipt: { ...printers.receipt, drawerKick: !printers.receipt.drawerKick } })}>
@@ -201,6 +217,70 @@ export default function SettingsPage() {
           <div className="grow">{bField('currencySymbol', 'Currency symbol')}</div>
         </div>
         {bField('receiptFooter', 'Receipt footer')}
+      </div>
+
+      <div className="panel mb">
+        <h2>Receipts</h2>
+        <p className="muted small">
+          Pick the receipt languages for your audience — e.g. 中文 primary with English secondary.
+          Labels print as "primary / secondary"; menu item names print exactly as entered in the menu.
+          For Chinese on paper, also set the thermal printer's charset to GBK below.
+        </p>
+        <div className="row wrap mb">
+          <div>
+            <label>Primary language</label><br />
+            <select value={receipts.langPrimary}
+              onChange={(e) => setReceipts({ ...receipts, langPrimary: e.target.value as ReceiptsSettings['langPrimary'] })}>
+              {(['en', 'ms', 'zh'] as const).map((l) => <option key={l} value={l}>{LANG_NAMES[l]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label>Secondary (optional)</label><br />
+            <select value={receipts.langSecondary}
+              onChange={(e) => setReceipts({ ...receipts, langSecondary: e.target.value as ReceiptsSettings['langSecondary'] })}>
+              <option value="">None</option>
+              {(['en', 'ms', 'zh'] as const).map((l) => <option key={l} value={l}>{LANG_NAMES[l]}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="row wrap mb">
+          <button className={receipts.serialEnabled ? 'primary' : ''}
+            onClick={() => setReceipts({ ...receipts, serialEnabled: !receipts.serialEnabled })}>
+            Receipt serial numbers {receipts.serialEnabled ? 'ON' : 'off'}
+          </button>
+          <input value={receipts.serialPrefix} style={{ width: 110 }} placeholder="Prefix"
+            onChange={(e) => setReceipts({ ...receipts, serialPrefix: e.target.value })} />
+          <span className="muted small">e.g. {receipts.serialPrefix || ''}000123 — assigned when a bill settles</span>
+        </div>
+        <label>Logo (PNG, max 200 KB — prints at the top of receipts)</label>
+        <div className="row wrap" style={{ alignItems: 'center' }}>
+          {logo && <img src={logo} alt="logo" style={{ maxHeight: 60, maxWidth: 160, background: '#fff', borderRadius: 4, padding: 2 }} />}
+          <input type="file" accept="image/png"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = async () => {
+                setError('');
+                try {
+                  const r = await api.put<SettingsPayload>('/api/settings/logo', { dataUrl: reader.result });
+                  setLogo(r.logo);
+                  setSettings(r);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Logo upload failed');
+                }
+              };
+              reader.readAsDataURL(file);
+              e.target.value = '';
+            }} />
+          {logo && (
+            <button className="ghost" onClick={async () => {
+              const r = await api.delete<SettingsPayload>('/api/settings/logo');
+              setLogo(r.logo);
+              setSettings(r);
+            }}>Remove</button>
+          )}
+        </div>
       </div>
 
       <div className="panel mb">

@@ -430,6 +430,11 @@ const MIGRATIONS: string[] = [
   ALTER TABLE orders ADD COLUMN promo_name TEXT;
   ALTER TABLE orders ADD COLUMN promo_cents INTEGER NOT NULL DEFAULT 0;
   `,
+  // v13 — sequential receipt/invoice serial, assigned when a bill settles
+  `
+  ALTER TABLE orders ADD COLUMN receipt_no TEXT;
+  CREATE UNIQUE INDEX idx_orders_receipt_no ON orders(receipt_no) WHERE receipt_no IS NOT NULL;
+  `,
 ];
 
 export function applySchema(db: Database): void {

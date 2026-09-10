@@ -1,7 +1,7 @@
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import type { BusinessSettings, ModifierSnapshot, Order, ReceiptEinvoice, TaxSettings } from '../types';
-import { formatMoney } from '../store';
+import { formatMoney, useStore } from '../store';
 
 const METHOD_LABEL: Record<string, string> = {
   cash: 'Cash',
@@ -10,7 +10,26 @@ const METHOD_LABEL: Record<string, string> = {
   other: 'Other',
 };
 
-function EinvoiceBlock({ einvoice }: { einvoice: ReceiptEinvoice }) {
+/** English fallbacks; the live set comes localized from the server. */
+const DEFAULT_LABELS: Record<string, string> = {
+  receipt_no: 'Receipt No',
+  table: 'Table',
+  takeaway: 'Takeaway',
+  delivery: 'Delivery',
+  subtotal: 'Subtotal',
+  discount: 'Discount',
+  rounding: 'Rounding',
+  total: 'TOTAL',
+  tendered: 'Tendered',
+  change: 'Change',
+  member: 'Member',
+  points_balance: 'Points balance',
+  refund: 'REFUND',
+  reg_no: 'Reg',
+  einvoice: 'LHDN e-Invoice',
+};
+
+function EinvoiceBlock({ einvoice, label }: { einvoice: ReceiptEinvoice; label: string }) {
   const [qr, setQr] = useState<string | null>(null);
   useEffect(() => {
     if (!einvoice.portal_url) return;
@@ -25,7 +44,7 @@ function EinvoiceBlock({ einvoice }: { einvoice: ReceiptEinvoice }) {
   return (
     <>
       <hr />
-      <div className="center" style={{ fontWeight: 700 }}>LHDN e-Invoice ({einvoice.status})</div>
+      <div className="center" style={{ fontWeight: 700 }}>{label} ({einvoice.status})</div>
       <div className="center" style={{ wordBreak: 'break-all', fontSize: 10 }}>{einvoice.uuid}</div>
       {qr && (
         <div className="center" style={{ marginTop: 4 }}>
@@ -48,18 +67,32 @@ export default function Receipt({
   einvoice?: ReceiptEinvoice | null;
 }) {
   const money = (c: number | null | undefined) => formatMoney(c, business.currencySymbol);
+  const receipts = useStore((s) => s.receipts);
+  const logo = useStore((s) => s.logo);
+  const L = (key: string) => receipts?.labels?.[key] ?? DEFAULT_LABELS[key] ?? key;
   const lines = order.items.filter((i) => i.status !== 'cancelled' && !i.parent_line_id);
   return (
     <div className="receipt">
+      {logo && (
+        <div className="center">
+          <img src={logo} alt="" style={{ maxWidth: 180, maxHeight: 90 }} />
+        </div>
+      )}
       <h2>{business.name}</h2>
       {business.address && <div className="center">{business.address}</div>}
       {business.phone && <div className="center">{business.phone}</div>}
-      {business.registrationNo && <div className="center">Reg: {business.registrationNo}</div>}
+      {business.registrationNo && <div className="center">{L('reg_no')}: {business.registrationNo}</div>}
       <hr />
       <div className="rrow">
         <span>#{order.order_no}</span>
-        <span>{order.type === 'dine_in' ? `Table ${order.table_name ?? ''}` : order.type.replace('_', ' ')}</span>
+        <span>{order.type === 'dine_in' ? `${L('table')} ${order.table_name ?? ''}` : order.type === 'takeaway' ? L('takeaway') : L('delivery')}</span>
       </div>
+      {order.receipt_no && (
+        <div className="rrow">
+          <span>{L('receipt_no')}</span>
+          <span>{order.receipt_no}</span>
+        </div>
+      )}
       <div className="rrow">
         <span>{new Date(order.closed_at ?? order.opened_at).toLocaleString()}</span>
         <span>{order.opened_by_name}</span>
@@ -87,12 +120,12 @@ export default function Receipt({
       })}
       <hr />
       <div className="rrow">
-        <span>Subtotal</span>
+        <span>{L('subtotal')}</span>
         <span>{money(order.subtotal_cents)}</span>
       </div>
       {order.discount_cents > 0 && (
         <div className="rrow">
-          <span>Discount</span>
+          <span>{L('discount')}</span>
           <span>-{money(order.discount_cents)}</span>
         </div>
       )}
@@ -116,12 +149,12 @@ export default function Receipt({
       )}
       {order.rounding_cents !== 0 && (
         <div className="rrow">
-          <span>Rounding</span>
+          <span>{L('rounding')}</span>
           <span>{money(order.rounding_cents)}</span>
         </div>
       )}
       <div className="rrow grand">
-        <span>TOTAL</span>
+        <span>{L('total')}</span>
         <span>{money(order.total_cents)}</span>
       </div>
       <hr />
@@ -134,11 +167,11 @@ export default function Receipt({
           {p.method === 'cash' && p.tendered_cents != null && (
             <>
               <div className="rrow">
-                <span>&nbsp;&nbsp;Tendered</span>
+                <span>&nbsp;&nbsp;{L('tendered')}</span>
                 <span>{money(p.tendered_cents)}</span>
               </div>
               <div className="rrow">
-                <span>&nbsp;&nbsp;Change</span>
+                <span>&nbsp;&nbsp;{L('change')}</span>
                 <span>{money(p.change_cents)}</span>
               </div>
             </>
@@ -149,7 +182,7 @@ export default function Receipt({
         <>
           {order.refunds.map((r) => (
             <div className="rrow" key={r.id}>
-              <span>REFUND ({METHOD_LABEL[r.method] ?? r.method}) — {r.reason}</span>
+              <span>{L('refund')} ({METHOD_LABEL[r.method] ?? r.method}) — {r.reason}</span>
               <span>-{money(r.amount_cents)}</span>
             </div>
           ))}
@@ -159,12 +192,12 @@ export default function Receipt({
       {order.customer_id && (
         <>
           <div className="rrow">
-            <span>Member …{(order.customer_phone ?? '').slice(-4)}</span>
+            <span>{L('member')} …{(order.customer_phone ?? '').slice(-4)}</span>
             <span>{order.points_earned > 0 ? `+${order.points_earned} pts` : ''}</span>
           </div>
           {order.customer_points != null && (
             <div className="rrow">
-              <span>Points balance</span>
+              <span>{L('points_balance')}</span>
               <span>{order.customer_points} pts</span>
             </div>
           )}
@@ -172,7 +205,7 @@ export default function Receipt({
         </>
       )}
       <div className="center">{business.receiptFooter}</div>
-      {einvoice && <EinvoiceBlock einvoice={einvoice} />}
+      {einvoice && <EinvoiceBlock einvoice={einvoice} label={L('einvoice')} />}
     </div>
   );
 }

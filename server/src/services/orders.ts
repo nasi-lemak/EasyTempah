@@ -16,7 +16,14 @@ import type {
 import { audit } from './audit';
 import { cashRoundingAdjustment, computeTotals } from './orderMath';
 import { bestPromo } from './promotions';
-import { getLoyaltySettings, getPlatformsSettings, getTaxSettings } from './settings';
+import {
+  getLoyaltySettings,
+  getPlatformsSettings,
+  getReceiptsSettings,
+  getSetting,
+  getTaxSettings,
+  setSetting,
+} from './settings';
 
 export interface OrderWithLines extends Order {
   items: OrderItem[];
@@ -691,11 +698,30 @@ export const addPayment = db.transaction(
       db.prepare(
         `UPDATE order_items SET status = 'served' WHERE order_id = ? AND status NOT IN ('cancelled','served')`,
       ).run(orderId);
+      assignReceiptSerial(orderId);
       earnLoyaltyPoints(orderId, userId);
     }
     return { change_cents: change, paid: fullyPaid };
   },
 );
+
+/**
+ * On settlement: stamp the next sequential receipt/invoice serial (e.g. INV-000123).
+ * Runs inside the payment transaction, so the settings-backed counter is race-free.
+ * Reprints reuse the stored serial; voids never consume one.
+ */
+function assignReceiptSerial(orderId: number): void {
+  const cfg = getReceiptsSettings();
+  if (!cfg.serialEnabled) return;
+  const already = db.prepare('SELECT receipt_no FROM orders WHERE id = ?').get(orderId) as {
+    receipt_no: string | null;
+  };
+  if (already.receipt_no) return;
+  const counter = getSetting<{ next: number }>('receipt_seq', { next: 1 });
+  const serial = `${cfg.serialPrefix}${String(counter.next).padStart(6, '0')}`;
+  setSetting('receipt_seq', { next: counter.next + 1 });
+  db.prepare('UPDATE orders SET receipt_no = ? WHERE id = ?').run(serial, orderId);
+}
 
 /** On full settlement: credit the attached member's points on net spend (excluding points tender). */
 function earnLoyaltyPoints(orderId: number, userId: number): void {

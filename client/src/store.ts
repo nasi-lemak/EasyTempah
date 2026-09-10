@@ -9,6 +9,7 @@ import type {
   PaymentsSettings,
   PlatformsSettings,
   PrintersSettings,
+  ReceiptsSettings,
   TaxSettings,
 } from './types';
 
@@ -21,6 +22,8 @@ export interface SettingsBundle {
   gateway?: GatewaySettings;
   platforms?: PlatformsSettings;
   loyalty?: LoyaltySettings;
+  receipts?: ReceiptsSettings;
+  logo?: string;
   demo?: DemoSettings;
 }
 
@@ -35,6 +38,8 @@ interface AppState {
   gateway: GatewaySettings | null;
   platforms: PlatformsSettings | null;
   loyalty: LoyaltySettings | null;
+  receipts: ReceiptsSettings | null;
+  logo: string;
   demo: DemoSettings | null;
   setAuth: (token: string, user: AuthUser) => void;
   clearAuth: () => void;
@@ -63,6 +68,8 @@ export const useStore = create<AppState>((set) => ({
   gateway: null,
   platforms: null,
   loyalty: null,
+  receipts: null,
+  logo: '',
   demo: null,
   setAuth: (token, user) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ token, user }));
@@ -82,6 +89,8 @@ export const useStore = create<AppState>((set) => ({
       ...(bundle.gateway ? { gateway: bundle.gateway } : {}),
       ...(bundle.platforms ? { platforms: bundle.platforms } : {}),
       ...(bundle.loyalty ? { loyalty: bundle.loyalty } : {}),
+      ...(bundle.receipts ? { receipts: bundle.receipts } : {}),
+      ...(bundle.logo !== undefined ? { logo: bundle.logo } : {}),
       ...(bundle.demo ? { demo: bundle.demo } : {}),
     }),
 }));

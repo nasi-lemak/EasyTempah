@@ -7,6 +7,7 @@ import type {
   PaymentsSettings,
   PlatformsSettings,
   PrintersSettings,
+  ReceiptsSettings,
   TaxSettings,
 } from '../types';
 
@@ -58,10 +59,30 @@ export function getTaxSettings(): TaxSettings {
 }
 
 export const DEFAULT_PRINTERS: PrintersSettings = {
-  receipt: { enabled: false, host: '192.168.0.100', port: 9100, drawerKick: true },
-  kitchen: { enabled: false, host: '192.168.0.101', port: 9100 },
-  bar: { enabled: false, host: '192.168.0.102', port: 9100 },
+  receipt: { enabled: false, host: '192.168.0.100', port: 9100, drawerKick: true, charset: 'ascii' },
+  kitchen: { enabled: false, host: '192.168.0.101', port: 9100, charset: 'ascii' },
+  bar: { enabled: false, host: '192.168.0.102', port: 9100, charset: 'ascii' },
 };
+
+export const DEFAULT_RECEIPTS: ReceiptsSettings = {
+  langPrimary: 'en',
+  langSecondary: '',
+  serialEnabled: true,
+  serialPrefix: 'INV-',
+};
+
+export function getReceiptsSettings(): ReceiptsSettings {
+  return getSetting('receipts', DEFAULT_RECEIPTS);
+}
+
+/** Receipt logo: a small PNG stored as a data URL ('' = none). */
+export function getLogoDataUrl(): string {
+  return getSetting<{ dataUrl: string }>('logo', { dataUrl: '' }).dataUrl;
+}
+
+export function setLogoDataUrl(dataUrl: string): void {
+  setSetting('logo', { dataUrl });
+}
 
 export const DEFAULT_PAYMENTS: PaymentsSettings = {
   channels: [

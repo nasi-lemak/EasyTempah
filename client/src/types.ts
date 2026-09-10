@@ -196,6 +196,7 @@ export interface Order {
   promo_id: number | null;
   promo_name: string | null;
   promo_cents: number;
+  receipt_no: string | null;
   items: OrderItem[];
   payments: Payment[];
   refunds: Refund[];
@@ -267,6 +268,18 @@ export interface Promotion {
 export interface DemoSettings {
   enabled: boolean;
   generatedAt?: string;
+}
+
+/**
+ * Receipt localization + serial numbering. `labels` is computed server-side
+ * from the language pair so screen and thermal receipts always agree.
+ */
+export interface ReceiptsSettings {
+  langPrimary: 'en' | 'ms' | 'zh';
+  langSecondary: '' | 'en' | 'ms' | 'zh';
+  serialEnabled: boolean;
+  serialPrefix: string;
+  labels: Record<string, string>;
 }
 
 export interface DeliveryPlatform {
@@ -352,6 +365,7 @@ export interface PrinterTarget {
   enabled: boolean;
   host: string;
   port: number;
+  charset?: 'ascii' | 'gbk'; // gbk for printers with Chinese firmware
 }
 
 export interface PrintersSettings {

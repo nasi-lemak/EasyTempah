@@ -1,18 +1,54 @@
 /**
  * ESC/POS document encoder for 80 mm thermal printers (42 columns, font A).
  * Pure byte-building — no I/O — so it is unit-testable; printer.ts does the TCP.
+ *
+ * Charsets: 'ascii' (default, safest across firmwares) transliterates accented
+ * Latin (Café → Cafe) and degrades the rest to '?'. 'gbk' targets printers
+ * with Chinese firmware: CJK text is encoded GBK with the printer's Kanji
+ * mode enabled, and column math treats CJK glyphs as double-width so aligned
+ * money columns stay aligned.
  */
+import iconv from 'iconv-lite';
 import type { OrderItemModifierSnapshot, TaxSettings } from '../types';
 import type { OrderWithLines } from './orders';
 import type { BusinessSettings } from '../types';
+import { makeLabels, type ReceiptLabels } from './receiptLang';
 
 const ESC = 0x1b;
 const GS = 0x1d;
+const FS = 0x1c;
 
 export const COLS = 42;
 
+export type PrinterCharset = 'ascii' | 'gbk';
+
+/** Display width of a string on the printer: CJK and fullwidth glyphs take 2 columns. */
+export function displayWidth(s: string): number {
+  let w = 0;
+  for (const ch of s) w += isWide(ch) ? 2 : 1;
+  return w;
+}
+
+function isWide(ch: string): boolean {
+  const c = ch.codePointAt(0)!;
+  return (
+    (c >= 0x1100 && c <= 0x115f) || // Hangul Jamo
+    (c >= 0x2e80 && c <= 0xa4cf) || // CJK radicals … Yi
+    (c >= 0xac00 && c <= 0xd7a3) || // Hangul syllables
+    (c >= 0xf900 && c <= 0xfaff) || // CJK compat ideographs
+    (c >= 0xfe30 && c <= 0xfe4f) || // CJK compat forms
+    (c >= 0xff00 && c <= 0xff60) || // Fullwidth forms
+    (c >= 0xffe0 && c <= 0xffe6)
+  );
+}
+
 export class EscPos {
   private chunks: Buffer[] = [];
+  private charset: PrinterCharset;
+
+  constructor(charset: PrinterCharset = 'ascii') {
+    this.charset = charset;
+  }
 
   raw(...bytes: number[]): this {
     this.chunks.push(Buffer.from(bytes));
@@ -20,15 +56,16 @@ export class EscPos {
   }
 
   /**
-   * Thermal firmwares vary in codepage support; stick to printable ASCII.
-   * Accented Latin characters transliterate (Café → Cafe) rather than degrade to '?'.
+   * Accented Latin transliterates (Café → Cafe) in both charsets; beyond that,
+   * 'ascii' degrades to '?' while 'gbk' encodes CJK for Chinese firmwares.
    */
   text(s: string): this {
-    const ascii = s
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^\x20-\x7e\n]/g, '?');
-    this.chunks.push(Buffer.from(ascii, 'ascii'));
+    const latin = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (this.charset === 'gbk') {
+      this.chunks.push(iconv.encode(latin.replace(/[^\x20-\x7e\n\u2e80-\uffe6]/g, '?'), 'gbk'));
+    } else {
+      this.chunks.push(Buffer.from(latin.replace(/[^\x20-\x7e\n]/g, '?'), 'ascii'));
+    }
     return this;
   }
 
@@ -37,7 +74,9 @@ export class EscPos {
   }
 
   init(): this {
-    return this.raw(ESC, 0x40);
+    this.raw(ESC, 0x40);
+    if (this.charset === 'gbk') this.raw(FS, 0x26); // enable Kanji/Chinese mode
+    return this;
   }
 
   align(where: 'left' | 'center' | 'right'): this {
@@ -83,19 +122,34 @@ export class EscPos {
     return this.raw(GS, 0x28, 0x6b, 3, 0, 49, 81, 48); // print
   }
 
+  /**
+   * Raster bit image (GS v 0). `rows` is packed 1-bit data, MSB first,
+   * `bytesPerRow` bytes per scanline, `height` scanlines. 1 = black dot.
+   */
+  raster(bytesPerRow: number, height: number, rows: Buffer): this {
+    this.raw(
+      GS, 0x76, 0x30, 0,
+      bytesPerRow & 0xff, (bytesPerRow >> 8) & 0xff,
+      height & 0xff, (height >> 8) & 0xff,
+    );
+    this.chunks.push(rows);
+    return this;
+  }
+
   /** Left text and right-aligned value on one 42-column row (left wraps). */
   cols(left: string, right: string): this {
-    const rightW = right.length;
+    const rightW = displayWidth(right);
     const leftW = COLS - rightW - 1;
-    if (left.length <= leftW) {
-      return this.line(left.padEnd(leftW) + ' ' + right);
+    if (displayWidth(left) <= leftW) {
+      return this.line(left + ' '.repeat(leftW - displayWidth(left)) + ' ' + right);
     }
-    const head = left.slice(0, leftW);
-    this.line(head.padEnd(leftW) + ' ' + right);
-    let rest = left.slice(leftW);
+    const [head, rest0] = splitAtWidth(left, leftW);
+    this.line(head + ' '.repeat(leftW - displayWidth(head)) + ' ' + right);
+    let rest = rest0;
     while (rest.length > 0) {
-      this.line('  ' + rest.slice(0, COLS - 2));
-      rest = rest.slice(COLS - 2);
+      const [chunk, next] = splitAtWidth(rest, COLS - 2);
+      this.line('  ' + chunk);
+      rest = next;
     }
     return this;
   }
@@ -103,6 +157,19 @@ export class EscPos {
   build(): Buffer {
     return Buffer.concat(this.chunks);
   }
+}
+
+/** Split so the first part's display width is at most `width`. */
+function splitAtWidth(s: string, width: number): [string, string] {
+  let w = 0;
+  let i = 0;
+  const chars = [...s];
+  for (; i < chars.length; i++) {
+    const cw = isWide(chars[i]) ? 2 : 1;
+    if (w + cw > width) break;
+    w += cw;
+  }
+  return [chars.slice(0, i).join(''), chars.slice(i).join('')];
 }
 
 function rm(cents: number, symbol: string): string {
@@ -115,25 +182,47 @@ export interface ReceiptEinvoiceInfo {
   portal_url: string | null;
 }
 
+export interface ReceiptLogo {
+  bytesPerRow: number;
+  height: number;
+  rows: Buffer;
+}
+
+export interface RenderReceiptOpts {
+  drawerKick?: boolean;
+  einvoice?: ReceiptEinvoiceInfo | null;
+  labels?: ReceiptLabels;
+  charset?: PrinterCharset;
+  logo?: ReceiptLogo | null;
+}
+
 export function renderReceipt(
   order: OrderWithLines,
   business: BusinessSettings,
   tax: TaxSettings,
-  opts: { drawerKick?: boolean; einvoice?: ReceiptEinvoiceInfo | null } = {},
+  opts: RenderReceiptOpts = {},
 ): Buffer {
-  const p = new EscPos().init();
+  const L = opts.labels ?? makeLabels('en');
+  const p = new EscPos(opts.charset ?? 'ascii').init();
   if (opts.drawerKick) p.drawerKick();
   const sym = business.currencySymbol + ' ';
 
-  p.align('center').bold(true).size(2).line(business.name).size(1).bold(false);
+  p.align('center');
+  if (opts.logo) p.raster(opts.logo.bytesPerRow, opts.logo.height, opts.logo.rows).feed(1);
+  p.bold(true).size(2).line(business.name).size(1).bold(false);
   if (business.address) p.line(business.address);
   if (business.phone) p.line(business.phone);
-  if (business.registrationNo) p.line(`Reg: ${business.registrationNo}`);
+  if (business.registrationNo) p.line(`${L.reg_no}: ${business.registrationNo}`);
   p.align('left').rule();
 
   const where =
-    order.type === 'dine_in' ? `Table ${order.table_name ?? ''}` : order.type.replace('_', ' ');
+    order.type === 'dine_in'
+      ? `${L.table} ${order.table_name ?? ''}`
+      : order.type === 'takeaway'
+        ? L.takeaway
+        : L.delivery;
   p.cols(`#${order.order_no}`, where);
+  if (order.receipt_no) p.cols(`${L.receipt_no}:`, order.receipt_no);
   p.cols(new Date().toLocaleString('en-MY', { hour12: false }), order.opened_by_name ?? '');
   p.rule();
 
@@ -148,36 +237,36 @@ export function renderReceipt(
   }
   p.rule();
 
-  p.cols('Subtotal', rm(order.subtotal_cents, sym));
-  if (order.discount_cents > 0) p.cols('Discount', '-' + rm(order.discount_cents, sym));
+  p.cols(L.subtotal, rm(order.subtotal_cents, sym));
+  if (order.discount_cents > 0) p.cols(L.discount, '-' + rm(order.discount_cents, sym));
   if (order.promo_cents > 0) p.cols(order.promo_name ?? 'Promo', '-' + rm(order.promo_cents, sym));
   if (order.service_cents > 0) p.cols(tax.serviceLabel, rm(order.service_cents, sym));
   if (order.tax_cents > 0) p.cols(tax.taxLabel, rm(order.tax_cents, sym));
-  if (order.rounding_cents !== 0) p.cols('Rounding', rm(order.rounding_cents, sym));
-  p.bold(true).size(2).cols('TOTAL', rm(order.total_cents, sym)).size(1).bold(false);
+  if (order.rounding_cents !== 0) p.cols(L.rounding, rm(order.rounding_cents, sym));
+  p.bold(true).size(2).cols(L.total, rm(order.total_cents, sym)).size(1).bold(false);
   p.rule();
 
   for (const pay of order.payments) {
     p.cols((pay.channel ?? pay.method.toUpperCase()) + (pay.reference ? ` (${pay.reference})` : ''), rm(pay.amount_cents, sym));
     if (pay.method === 'cash' && pay.tendered_cents != null) {
-      p.cols('  Tendered', rm(pay.tendered_cents, sym));
-      p.cols('  Change', rm(pay.change_cents ?? 0, sym));
+      p.cols(`  ${L.tendered}`, rm(pay.tendered_cents, sym));
+      p.cols(`  ${L.change}`, rm(pay.change_cents ?? 0, sym));
     }
   }
   for (const r of order.refunds ?? []) {
-    p.cols(`REFUND (${r.method}) ${r.reason}`, '-' + rm(r.amount_cents, sym));
+    p.cols(`${L.refund} (${r.method}) ${r.reason}`, '-' + rm(r.amount_cents, sym));
   }
 
   if (order.customer_id) {
     const tail = (order.customer_phone ?? '').slice(-4);
-    p.cols(`Member ...${tail}`, order.points_earned > 0 ? `+${order.points_earned} pts` : '');
-    if (order.customer_points != null) p.cols('Points balance', `${order.customer_points} pts`);
+    p.cols(`${L.member} ...${tail}`, order.points_earned > 0 ? `+${order.points_earned} pts` : '');
+    if (order.customer_points != null) p.cols(L.points_balance, `${order.customer_points} pts`);
   }
 
   p.align('center').feed(1).line(business.receiptFooter);
   if (opts.einvoice) {
     p.align('left').rule();
-    p.align('center').bold(true).line(`LHDN e-Invoice (${opts.einvoice.status})`).bold(false);
+    p.align('center').bold(true).line(`${L.einvoice} (${opts.einvoice.status})`).bold(false);
     p.line(opts.einvoice.uuid);
     if (opts.einvoice.portal_url) p.feed(1).qr(opts.einvoice.portal_url);
   }
@@ -199,8 +288,9 @@ export function renderKitchenTicket(info: {
   where: string; // "Table T3" / "takeaway"
   lines: TicketLine[];
   order_notes?: string | null;
+  charset?: PrinterCharset;
 }): Buffer {
-  const p = new EscPos().init();
+  const p = new EscPos(info.charset ?? 'ascii').init();
   p.align('center').bold(true).size(2).line(info.where).size(1).bold(false);
   p.line(`#${info.order_no}  [${info.station.toUpperCase()}]`);
   p.line(new Date().toLocaleTimeString('en-MY', { hour12: false }));

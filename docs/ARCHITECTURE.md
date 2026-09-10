@@ -275,7 +275,28 @@ Two paths, both driven by the same order data:
   The thermal receipt renders the same content as the HTML one: itemised lines
   with modifiers, discount/promo/service/tax/rounding, payments with
   tendered/change, refunds, the member points block, and the LHDN e-invoice
-  section (status, UUID, MyInvois portal QR printed natively). Kitchen and bar tickets print
+  section (status, UUID, MyInvois portal QR printed natively).
+
+Receipt identity and localization (`services/receiptLang.ts`, `logo.ts`):
+
+- **Languages** — the business picks a primary and optional secondary receipt
+  language (en/ms/zh) to fit its audience; fixed labels render as
+  "primary / secondary" (小计 / Subtotal) and are computed server-side once, so
+  the HTML and thermal receipts always agree. Operator-entered text (menu item
+  names, tax/service labels, footer) prints as written. Each printer has a
+  charset: 'ascii' (default; accented Latin transliterates) or 'gbk' for
+  Chinese-firmware printers — GBK output enables the printer's Kanji mode
+  (FS &) and the 42-column math counts CJK glyphs as double-width so money
+  columns stay aligned.
+- **Logo** — a small PNG uploaded in Settings (validated by actually
+  rasterizing it), stored as a data URL, shown on the HTML receipt and printed
+  as a packed 1-bit ESC/POS raster (GS v 0), downscaled to 384 dots wide with
+  transparency composited to white.
+- **Serial numbers** — orders get a sequential receipt serial (prefix +
+  6-digit counter, e.g. INV-000123) stamped inside the payment transaction the
+  moment the bill settles, so the counter is race-free, voids never consume a
+  number and reprints reuse it. Separate from the per-day order number;
+  included in the orders CSV export. Kitchen and bar tickets print
   automatically when lines are fired (staff send and QR guest submissions),
   routed per station, as fire-and-forget so a dead printer never blocks an
   order; explicit prints (receipt, reprint, test page) surface a 502 to staff
