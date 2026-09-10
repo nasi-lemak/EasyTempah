@@ -225,6 +225,18 @@ export default function SettingsPage() {
           <div className="grow">{bField('currencySymbol', 'Currency symbol')}</div>
         </div>
         {bField('receiptFooter', 'Receipt footer')}
+        <div className="row wrap mb" style={{ alignItems: 'center' }}>
+          <button
+            className={business.usePagers ? 'primary' : ''}
+            onClick={() => setBusiness({ ...business, usePagers: !business.usePagers })}
+          >
+            📟 Collection pagers {business.usePagers ? 'ON' : 'off'}
+          </button>
+          <span className="muted small grow" style={{ minWidth: 220 }}>
+            Counter venues: key the pager number on each order — it shows on the kitchen screen and
+            ticket so the pass knows which pager to ring when the food is up.
+          </span>
+        </div>
         <label>Brand color (buttons and highlights on every terminal)</label>
         <div className="row wrap" style={{ alignItems: 'center' }}>
           {['#2dd4a7', '#4aa8ff', '#a78bfa', '#ff9d5c', '#f2635c', '#e8b93e'].map((c) => (

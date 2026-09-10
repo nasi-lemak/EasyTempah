@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db/connection';
 import { AuthedRequest, requireAuth, requireRole, verifyPin } from '../middleware/auth';
-import { badRequest } from '../middleware/errors';
+import { badRequest, conflict, notFound } from '../middleware/errors';
 import { publish } from '../realtime/bus';
 import { audit } from '../services/audit';
 import {
@@ -27,7 +27,7 @@ import {
 import { createCreditNoteForRefund, einvoiceWithPortal } from '../services/einvoice';
 import { printKitchenTickets } from '../services/printer';
 import { getBusinessSettings, getPaymentsSettings, getTaxSettings } from '../services/settings';
-import type { OrderType } from '../types';
+import type { Order, OrderType } from '../types';
 
 export const ordersRouter = Router();
 ordersRouter.use(requireAuth);
@@ -181,6 +181,33 @@ ordersRouter.patch('/:id', (req: AuthedRequest, res) => {
   }
   publish('orders');
   res.json({ order: getOrder(orderId) });
+});
+
+/**
+ * Key a collection-pager number against an open order (null clears it). The
+ * pass reads it off the KDS card / kitchen ticket and rings that pager when
+ * the food is up. One pager per live order — a duplicate is exactly the
+ * mix-up pagers exist to prevent, so it 409s naming the clashing order.
+ */
+ordersRouter.post('/:id/pager', (req: AuthedRequest, res) => {
+  const { pager_no } = req.body as { pager_no?: number | null };
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(Number(req.params.id)) as Order | undefined;
+  if (!order) throw notFound('Order not found');
+  if (order.status !== 'open') throw conflict('Only open orders can hold a pager');
+  if (pager_no != null) {
+    if (!Number.isInteger(pager_no) || pager_no < 1 || pager_no > 999) {
+      throw badRequest('Pager number must be 1-999');
+    }
+    const clash = db
+      .prepare("SELECT order_no FROM orders WHERE pager_no = ? AND status = 'open' AND id != ?")
+      .get(pager_no, order.id) as { order_no: string } | undefined;
+    if (clash) throw conflict(`Pager ${pager_no} is already on open order #${clash.order_no}`);
+  }
+  db.prepare('UPDATE orders SET pager_no = ? WHERE id = ?').run(pager_no ?? null, order.id);
+  audit(req.user!.id, 'order.pager', { orderId: order.id, pager_no: pager_no ?? null });
+  publish('orders');
+  publish('kds');
+  res.json({ order: getOrder(order.id) });
 });
 
 /** Attach a loyalty member (existing by id, or new by phone + consent) to an open order. */

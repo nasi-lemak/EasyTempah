@@ -110,6 +110,7 @@ export async function printKitchenTickets(orderId: number, lineIds: number[]): P
         order_no: order.order_no,
         where,
         order_notes: order.notes,
+        pager_no: order.pager_no,
         lines,
         charset: printers[station].charset ?? 'ascii',
       });

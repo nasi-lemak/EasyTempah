@@ -37,6 +37,7 @@ export default function Pos() {
   const [showOpenItem, setShowOpenItem] = useState(false);
   const [itemQuery, setItemQuery] = useState('');
   const [showVoid, setShowVoid] = useState(false);
+  const [showPager, setShowPager] = useState(false);
   const [priceLine, setPriceLine] = useState<{ id: number; name: string; cents: number } | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<{ id: number; name: string } | null>(null);
   const [showSplit, setShowSplit] = useState(false);
@@ -166,6 +167,18 @@ export default function Pos() {
       setOrder(r.order);
     });
 
+  const setPager = (value: string) => {
+    setShowPager(false);
+    run(async () => {
+      if (!order) return;
+      const trimmed = value.trim();
+      const r = await api.post<{ order: Order }>(`/api/orders/${order.id}/pager`, {
+        pager_no: trimmed === '' ? null : parseInt(trimmed, 10),
+      });
+      setOrder(r.order);
+    });
+  };
+
   const voidOrder = (reason: string) => {
     setShowVoid(false);
     run(async () => {
@@ -279,6 +292,16 @@ export default function Pos() {
                     ? ` · ${platformLabel(order.platform)}${order.platform_ref ? ` #${order.platform_ref}` : ''}`
                     : ` · ${order.type.replace('_', ' ')}`}
               </strong>
+              {business?.usePagers && !order.platform && (
+                <button
+                  className="ghost small"
+                  disabled={!isOpen}
+                  title="Key the collection pager handed to this customer"
+                  onClick={() => setShowPager(true)}
+                >
+                  📟 {order.pager_no ?? 'Pager'}
+                </button>
+              )}
               <span className={`badge ${order.status}`}>{order.status}</span>
             </div>
             <div className="muted small">
@@ -413,6 +436,19 @@ export default function Pos() {
             navigate(`/pos/${newId}`);
           }}
           onClose={() => setShowSplit(false)}
+        />
+      )}
+      {showPager && (
+        <TextPromptDialog
+          title="Collection pager"
+          label="Pager number handed to the customer (blank clears it)"
+          initial={order.pager_no != null ? String(order.pager_no) : ''}
+          inputMode="numeric"
+          placeholder="e.g. 14"
+          confirmLabel="Set pager"
+          allowEmpty
+          onSubmit={setPager}
+          onClose={() => setShowPager(false)}
         />
       )}
       {showVoid && (

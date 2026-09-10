@@ -176,6 +176,7 @@ export default function Kds() {
               <div className="head">
                 <strong>
                   {t.table_name ? `Table ${t.table_name}` : t.type.replace('_', ' ')} · #{t.order_no.slice(-4)}
+                  {t.pager_no != null && <span className="badge ready" style={{ marginLeft: 6 }}>📟 {t.pager_no}</span>}
                 </strong>
                 <span className={`age ${ageClass}`}>{mins}m</span>
               </div>

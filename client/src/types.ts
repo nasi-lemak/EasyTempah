@@ -185,6 +185,7 @@ export interface Refund {
 export interface Order {
   id: number;
   order_no: string;
+  pager_no: number | null;
   type: OrderType;
   status: OrderStatus;
   table_id: number | null;
@@ -419,6 +420,7 @@ export interface BusinessSettings {
   currency: string;
   currencySymbol: string;
   accentColor: string;
+  usePagers: boolean;
   receiptFooter: string;
 }
 
@@ -465,6 +467,7 @@ export interface KdsTicket {
   order_id: number;
   order_no: string;
   type: OrderType;
+  pager_no: number | null;
   table_name: string | null;
   order_notes: string | null;
   sent_at: string | null;

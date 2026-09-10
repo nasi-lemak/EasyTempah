@@ -113,6 +113,7 @@ export interface Order {
   status: OrderStatus;
   table_id: number | null;
   covers: number;
+  pager_no: number | null;
   notes: string | null;
   discount_type: 'percent' | 'fixed' | null;
   discount_value: number; // percent in basis points is overkill; percent as integer 0-100, fixed as cents
@@ -393,6 +394,7 @@ export interface BusinessSettings {
   currencySymbol: string; // "RM"
   receiptFooter: string;
   accentColor: string; // brand color for all terminals, hex e.g. "#2dd4a7"
+  usePagers: boolean; // counter venues: key a pager number against orders
 }
 
 /** Receipt localization + serial numbering, chosen to fit the business's audience. */

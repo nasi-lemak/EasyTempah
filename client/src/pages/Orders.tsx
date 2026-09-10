@@ -113,7 +113,10 @@ export default function Orders() {
         <tbody>
           {orders.map((o) => (
             <tr key={o.id}>
-              <td>{o.order_no}</td>
+              <td>
+                {o.order_no}
+                {o.pager_no != null && <span className="muted small"> 📟{o.pager_no}</span>}
+              </td>
               <td className="small muted">{formatDateTime(o.opened_at)}</td>
               <td>
                 {o.platform ? (

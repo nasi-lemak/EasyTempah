@@ -74,4 +74,15 @@ describe('renderKitchenTicket', () => {
     expect(text).toContain('>> birthday table');
     expect([...buf.slice(-4)]).toEqual([0x1d, 0x56, 66, 3]);
   });
+
+  it('prints the pager number when one is keyed, and omits the line otherwise', () => {
+    const base = {
+      station: 'kitchen',
+      order_no: '20260910-0001',
+      where: 'takeaway',
+      lines: [{ qty: 1, name: 'Kaya Toast Set', modifiers: [], notes: null, source: 'staff' as const }],
+    };
+    expect(renderKitchenTicket({ ...base, pager_no: 14 }).toString('ascii')).toContain('PAGER 14');
+    expect(renderKitchenTicket(base).toString('ascii')).not.toContain('PAGER');
+  });
 });

@@ -13,6 +13,7 @@ export function TextPromptDialog({
   confirmLabel = 'OK',
   danger = false,
   inputMode,
+  allowEmpty = false,
   onSubmit,
   onClose,
 }: {
@@ -23,6 +24,8 @@ export function TextPromptDialog({
   confirmLabel?: string;
   danger?: boolean;
   inputMode?: 'decimal' | 'numeric' | 'text';
+  /** Permit submitting an empty value (e.g. "blank clears the field"). */
+  allowEmpty?: boolean;
   onSubmit: (value: string) => void;
   onClose: () => void;
 }) {
@@ -35,14 +38,14 @@ export function TextPromptDialog({
         placeholder={placeholder}
         inputMode={inputMode}
         onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && value.trim() && onSubmit(value.trim())}
+        onKeyDown={(e) => e.key === 'Enter' && (allowEmpty || value.trim()) && onSubmit(value.trim())}
         style={{ width: '100%' }}
         className="mb"
         autoFocus
       />
       <button
         className={danger ? 'danger' : 'primary'}
-        disabled={!value.trim()}
+        disabled={!allowEmpty && !value.trim()}
         onClick={() => onSubmit(value.trim())}
       >
         {confirmLabel}

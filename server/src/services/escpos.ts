@@ -363,10 +363,12 @@ export function renderKitchenTicket(info: {
   where: string; // "Table T3" / "takeaway"
   lines: TicketLine[];
   order_notes?: string | null;
+  pager_no?: number | null;
   charset?: PrinterCharset;
 }): Buffer {
   const p = new EscPos(info.charset ?? 'ascii').init();
   p.align('center').bold(true).size(2).line(info.where).size(1).bold(false);
+  if (info.pager_no != null) p.bold(true).size(2).line(`PAGER ${info.pager_no}`).size(1).bold(false);
   p.line(`#${info.order_no}  [${info.station.toUpperCase()}]`);
   p.line(new Date().toLocaleTimeString('en-MY', { hour12: false }));
   p.align('left').rule('=');

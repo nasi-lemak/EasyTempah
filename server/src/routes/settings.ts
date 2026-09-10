@@ -93,6 +93,7 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
     if (!/^#[0-9a-fA-F]{6}$/.test(merged.accentColor)) {
       throw badRequest('accentColor must be a 6-digit hex color, e.g. #2dd4a7');
     }
+    merged.usePagers = !!merged.usePagers;
     setSetting('business', merged);
   }
   if (tax) {

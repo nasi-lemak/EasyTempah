@@ -506,6 +506,11 @@ const MIGRATIONS: string[] = [
   ALTER TABLE service_calls_v18 RENAME TO service_calls;
   CREATE INDEX idx_service_calls_open ON service_calls(table_id) WHERE acked_at IS NULL;
   `,
+  // v19 — collection pagers: the number keyed against a counter order so the
+  // pass knows which physical pager to ring when the food is up.
+  `
+  ALTER TABLE orders ADD COLUMN pager_no INTEGER;
+  `,
 ];
 
 export function applySchema(db: Database): void {

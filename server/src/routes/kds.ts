@@ -19,7 +19,7 @@ kdsRouter.get('/tickets', (req, res) => {
   }
   const lines = db
     .prepare(
-      `SELECT oi.*, o.order_no, o.type, o.notes AS order_notes, t.name AS table_name
+      `SELECT oi.*, o.order_no, o.type, o.pager_no, o.notes AS order_notes, t.name AS table_name
        FROM order_items oi
        JOIN orders o ON o.id = oi.order_id
        LEFT JOIN dining_tables t ON t.id = o.table_id
@@ -29,7 +29,7 @@ kdsRouter.get('/tickets', (req, res) => {
     )
     .all(...params) as Record<string, unknown>[];
 
-  const byOrder = new Map<number, { order_id: number; order_no: string; type: string; table_name: string | null; order_notes: string | null; sent_at: string | null; lines: unknown[] }>();
+  const byOrder = new Map<number, { order_id: number; order_no: string; type: string; pager_no: number | null; table_name: string | null; order_notes: string | null; sent_at: string | null; lines: unknown[] }>();
   for (const line of lines) {
     const orderId = line.order_id as number;
     let ticket = byOrder.get(orderId);
@@ -38,6 +38,7 @@ kdsRouter.get('/tickets', (req, res) => {
         order_id: orderId,
         order_no: line.order_no as string,
         type: line.type as string,
+        pager_no: (line.pager_no as number) ?? null,
         table_name: (line.table_name as string) ?? null,
         order_notes: (line.order_notes as string) ?? null,
         sent_at: (line.sent_at as string) ?? null,
@@ -66,7 +67,7 @@ const UNBUMP_FLOW: Record<string, OrderItemStatus> = {
 kdsRouter.get('/recent', (_req, res) => {
   const lines = db
     .prepare(
-      `SELECT oi.*, o.order_no, o.type, t.name AS table_name
+      `SELECT oi.*, o.order_no, o.type, o.pager_no, t.name AS table_name
        FROM order_items oi
        JOIN orders o ON o.id = oi.order_id
        LEFT JOIN dining_tables t ON t.id = o.table_id
