@@ -149,10 +149,17 @@ export const DEFAULT_LOYALTY: LoyaltySettings = {
   earnPointsPerRm: 1,
   redeemPointsPerRm: 100, // 100 points = RM1 (1 point = 1 sen)
   minRedeemPoints: 100,
+  retentionMonths: 0,
+  privacyNotice:
+    'Nombor telefon anda disimpan untuk mata ganjaran sahaja dan tidak dikongsi dengan pihak lain. '
+    + 'Anda boleh meminta staf untuk melihat, membetulkan atau memadam data anda pada bila-bila masa. / '
+    + 'Your phone number is stored for loyalty points only and is never shared. '
+    + 'You may ask staff to view, correct or delete your data at any time.',
 };
 
 export function getLoyaltySettings(): LoyaltySettings {
-  return getSetting('loyalty', DEFAULT_LOYALTY);
+  // Spread over the default so settings saved before newer fields existed stay valid.
+  return { ...DEFAULT_LOYALTY, ...getSetting('loyalty', DEFAULT_LOYALTY) };
 }
 
 export const DEFAULT_GATEWAY: GatewaySettings = {

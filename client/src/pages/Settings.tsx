@@ -432,9 +432,33 @@ export default function SettingsPage() {
             <input type="number" value={loyalty.minRedeemPoints} onChange={(e) => setLoyalty({ ...loyalty, minRedeemPoints: Number(e.target.value) })} style={{ width: '100%' }} />
           </div>
         </div>
-        <div className="muted small">
+        <div className="muted small mb">
           Members join by phone number at payment. Points are earned on net spend (excluding points
           tender) once the bill settles, and redeem as tender against the balance.
+        </div>
+        <div className="row">
+          <div className="grow mb" style={{ minWidth: 220 }}>
+            <label>Auto-delete inactive members after (months, 0 = keep forever)</label>
+            <input
+              type="number"
+              min={0}
+              value={loyalty.retentionMonths}
+              onChange={(e) => setLoyalty({ ...loyalty, retentionMonths: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+              style={{ width: '100%' }}
+            />
+          </div>
+        </div>
+        <label>Privacy notice (read to the customer when they join — BM + English)</label>
+        <textarea
+          value={loyalty.privacyNotice}
+          onChange={(e) => setLoyalty({ ...loyalty, privacyNotice: e.target.value })}
+          rows={3}
+          style={{ width: '100%' }}
+        />
+        <div className="muted small mt">
+          PDPA: consent is recorded when a member joins; managers can show, correct or erase a
+          member's data from the Members page. The retention setting anonymises members with no
+          visits in the chosen window, once a day.
         </div>
       </div>
 

@@ -169,6 +169,7 @@ export interface Customer {
   total_spent_cents: number;
   created_at: string;
   last_visit_at: string | null;
+  consent_at: string | null;
 }
 
 export interface LoyaltySettings {
@@ -176,6 +177,10 @@ export interface LoyaltySettings {
   earnPointsPerRm: number; // points earned per RM1 of net spend (excl. points tender)
   redeemPointsPerRm: number; // points needed to redeem RM1 (100 → 1 point = 1 sen)
   minRedeemPoints: number;
+  /** Months of inactivity before a member is auto-anonymised (0 = keep forever). */
+  retentionMonths: number;
+  /** PDPA privacy notice shown when a customer joins (BM + English). */
+  privacyNotice: string;
 }
 
 export interface OrderItemModifierSnapshot {

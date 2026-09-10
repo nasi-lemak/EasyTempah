@@ -191,6 +191,12 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
     if (merged.earnPointsPerRm < 0 || merged.redeemPointsPerRm < 1 || merged.minRedeemPoints < 0) {
       throw badRequest('Loyalty rates must be non-negative (redeem points per RM at least 1)');
     }
+    if (!Number.isInteger(merged.retentionMonths) || merged.retentionMonths < 0) {
+      throw badRequest('Retention months must be 0 (keep forever) or a positive whole number');
+    }
+    if (typeof merged.privacyNotice !== 'string' || merged.privacyNotice.length > 2000) {
+      throw badRequest('Privacy notice must be text up to 2000 characters');
+    }
     setSetting('loyalty', merged);
   }
   if (receipts) {

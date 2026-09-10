@@ -183,11 +183,19 @@ ordersRouter.patch('/:id', (req: AuthedRequest, res) => {
   res.json({ order: getOrder(orderId) });
 });
 
-/** Attach a loyalty member (created if new) to an open order. */
+/** Attach a loyalty member (existing by id, or new by phone + consent) to an open order. */
 ordersRouter.post('/:id/customer', (req: AuthedRequest, res) => {
-  const { phone, name } = req.body as { phone?: string; name?: string };
-  if (!phone) throw badRequest('phone required');
-  const customer = attachCustomer(Number(req.params.id), phone, name, req.user!.id);
+  const { phone, name, customer_id, consent } = req.body as {
+    phone?: string;
+    name?: string;
+    customer_id?: number;
+    consent?: boolean;
+  };
+  if (!phone && customer_id == null) throw badRequest('phone or customer_id required');
+  const customer = attachCustomer(Number(req.params.id), phone ?? '', name, req.user!.id, {
+    customerId: customer_id ?? undefined,
+    consent: !!consent,
+  });
   publish('orders');
   res.json({ customer, order: getOrder(Number(req.params.id)) });
 });

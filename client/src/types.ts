@@ -254,6 +254,15 @@ export interface Customer {
   total_spent_cents: number;
   created_at: string;
   last_visit_at: string | null;
+  consent_at: string | null;
+}
+
+/** Trimmed shape the till lookup returns — never the full record. */
+export interface CustomerLookup {
+  id: number;
+  name: string | null;
+  points: number;
+  phone_tail: string;
 }
 
 export interface LoyaltySettings {
@@ -261,6 +270,8 @@ export interface LoyaltySettings {
   earnPointsPerRm: number;
   redeemPointsPerRm: number;
   minRedeemPoints: number;
+  retentionMonths: number;
+  privacyNotice: string;
 }
 
 /** Scheduled automatic discount (happy hour etc.), managed under Menu → Promos. */

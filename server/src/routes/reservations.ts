@@ -138,13 +138,20 @@ reservationsRouter.post('/:id/seat', (req: AuthedRequest, res) => {
   db.prepare(
     "UPDATE reservations SET status = 'seated', table_id = ?, seated_order_id = ? WHERE id = ?",
   ).run(tableId, orderId, row.id);
-  // Carry the member onto the bill so points work without re-asking for the phone.
+  // Carry an EXISTING member onto the bill so points work without re-asking
+  // for the phone. Seating never creates a member — joining loyalty needs the
+  // customer's consent at the till (PDPA), not a booking phone number.
   let member: Customer | null = null;
   if (row.phone && getLoyaltySettings().enabled) {
-    try {
-      member = attachCustomer(orderId, row.phone, row.name, req.user!.id);
-    } catch {
-      /* loyalty attach is best-effort — seating must not fail on it */
+    const existing = db
+      .prepare("SELECT id FROM customers WHERE phone = ? AND phone NOT LIKE 'deleted-%'")
+      .get(row.phone.replace(/[^\d+]/g, '')) as { id: number } | undefined;
+    if (existing) {
+      try {
+        member = attachCustomer(orderId, '', row.name, req.user!.id, { customerId: existing.id });
+      } catch {
+        /* loyalty attach is best-effort — seating must not fail on it */
+      }
     }
   }
   audit(req.user!.id, 'reservation.seat', { id: row.id, orderId, tableId });

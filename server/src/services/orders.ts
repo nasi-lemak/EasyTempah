@@ -772,24 +772,46 @@ function earnLoyaltyPoints(orderId: number, userId: number): void {
   }
 }
 
-/** Attach (creating if new) a member by phone number to an open order. */
+/**
+ * Attach a member to an open order — by id (till lookup found them), or by
+ * phone. Creating a NEW member requires PDPA consent: the cashier confirms the
+ * customer agreed to the privacy notice, and the moment is stored.
+ */
 export const attachCustomer = db.transaction(
-  (orderId: number, phone: string, name: string | undefined, userId: number): Customer => {
+  (
+    orderId: number,
+    phone: string,
+    name: string | undefined,
+    userId: number,
+    opts: { customerId?: number; consent?: boolean } = {},
+  ): Customer => {
     if (!getLoyaltySettings().enabled) throw conflict('Loyalty is not enabled in Settings');
     const order = requireOpenOrder(orderId);
     if (order.platform) throw conflict('Platform orders do not earn loyalty points');
-    const clean = phone.replace(/[^\d+]/g, '');
-    if (!/^\+?\d{8,15}$/.test(clean)) throw badRequest('Phone number looks invalid');
-    let customer = db.prepare('SELECT * FROM customers WHERE phone = ?').get(clean) as
-      | Customer
-      | undefined;
-    if (!customer) {
-      const info = db
-        .prepare('INSERT INTO customers (phone, name) VALUES (?, ?)')
-        .run(clean, name?.trim() || null);
-      customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(info.lastInsertRowid) as Customer;
-      audit(userId, 'customer.create', { phone: clean });
-    } else if (name?.trim() && !customer.name) {
+    let customer: Customer | undefined;
+    if (opts.customerId != null) {
+      customer = db
+        .prepare("SELECT * FROM customers WHERE id = ? AND phone NOT LIKE 'deleted-%'")
+        .get(opts.customerId) as Customer | undefined;
+      if (!customer) throw notFound('Member not found');
+    } else {
+      const clean = phone.replace(/[^\d+]/g, '');
+      if (!/^\+?\d{8,15}$/.test(clean)) throw badRequest('Phone number looks invalid');
+      customer = db.prepare('SELECT * FROM customers WHERE phone = ?').get(clean) as
+        | Customer
+        | undefined;
+      if (!customer) {
+        if (!opts.consent) {
+          throw badRequest('Customer must agree to the privacy notice before joining');
+        }
+        const info = db
+          .prepare("INSERT INTO customers (phone, name, consent_at) VALUES (?, ?, datetime('now'))")
+          .run(clean, name?.trim() || null);
+        customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(info.lastInsertRowid) as Customer;
+        audit(userId, 'customer.create', { phone: clean, consent: true });
+      }
+    }
+    if (name?.trim() && !customer.name) {
       db.prepare('UPDATE customers SET name = ? WHERE id = ?').run(name.trim(), customer.id);
       customer.name = name.trim();
     }

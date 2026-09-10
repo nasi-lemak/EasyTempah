@@ -484,6 +484,11 @@ const MIGRATIONS: string[] = [
   CREATE INDEX idx_reservations_when ON reservations(reserved_at);
   CREATE INDEX idx_reservations_table ON reservations(table_id) WHERE status = 'booked';
   `,
+  // v17 — PDPA: when the member agreed to the loyalty privacy notice.
+  // Anonymised (deleted) members are marked by phone = 'deleted-<id>'.
+  `
+  ALTER TABLE customers ADD COLUMN consent_at TEXT;
+  `,
 ];
 
 export function applySchema(db: Database): void {

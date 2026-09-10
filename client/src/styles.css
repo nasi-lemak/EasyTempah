@@ -455,6 +455,11 @@ button.guest-cartbar:hover:not(:disabled) { background: var(--accent-dark); }
   body:has(.receipt) * { visibility: hidden; }
   .receipt, .receipt * { visibility: visible; }
   .receipt { position: absolute; left: 0; top: 0; width: 100%; }
+  /* Member data sheet (PDPA access request) prints alone, in ink on white. */
+  body:has(.print-sheet) * { visibility: hidden; }
+  .print-sheet, .print-sheet * { visibility: visible; }
+  .print-sheet { position: absolute; left: 0; top: 0; width: 100%; color: #000; }
+  .print-sheet .data th, .print-sheet .data td { color: #000; border-color: #999; }
   body:has(.qr-sheet) .sidebar, body:has(.qr-sheet) .no-print { display: none; }
   body:has(.qr-sheet) .main { padding: 0; }
   .qr-card { border: 1px solid #ccc; }

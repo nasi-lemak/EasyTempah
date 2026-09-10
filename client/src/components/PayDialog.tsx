@@ -2,7 +2,7 @@ import QRCode from 'qrcode';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { useMoney, useStore } from '../store';
-import type { Customer, Order, PaymentChannel, PaymentIntent } from '../types';
+import type { CustomerLookup, Order, PaymentChannel, PaymentIntent } from '../types';
 import Modal from './Modal';
 
 /** Loyalty member panel: lookup/attach by phone, then redeem points as tender. */
@@ -17,7 +17,8 @@ function MemberPanel({
   const loyalty = useStore((s) => s.loyalty);
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
-  const [needName, setNeedName] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [consent, setConsent] = useState(false);
   const [pointsStr, setPointsStr] = useState('');
   const [error, setError] = useState('');
 
@@ -26,19 +27,22 @@ function MemberPanel({
   const attach = async () => {
     setError('');
     try {
-      const found = await api.get<{ customer: Customer | null }>(
+      const found = await api.get<{ customer: CustomerLookup | null }>(
         `/api/customers/lookup?phone=${encodeURIComponent(phone)}`,
       );
-      if (!found.customer && !needName) {
-        setNeedName(true); // new member — offer a name field, attach on next tap
+      if (!found.customer && !joining) {
+        setJoining(true); // new member — show the privacy notice + consent step
         return;
       }
-      const r = await api.post<{ order: Order }>(`/api/orders/${order.id}/customer`, {
-        phone: found.customer?.phone ?? phone,
-        name: name || undefined,
-      });
+      const r = await api.post<{ order: Order }>(
+        `/api/orders/${order.id}/customer`,
+        found.customer
+          ? { customer_id: found.customer.id }
+          : { phone, name: name || undefined, consent },
+      );
       onOrder(r.order);
-      setNeedName(false);
+      setJoining(false);
+      setConsent(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed');
     }
@@ -88,21 +92,39 @@ function MemberPanel({
           )}
         </>
       ) : (
-        <div className="row">
-          <input
-            inputMode="tel"
-            placeholder="Member phone (optional)"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="grow"
-          />
-          {needName && (
-            <input placeholder="Name (new member)" value={name} onChange={(e) => setName(e.target.value)} />
+        <>
+          <div className="row">
+            <input
+              inputMode="tel"
+              placeholder="Member phone (optional)"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="grow"
+            />
+            {joining && (
+              <input placeholder="Name (new member)" value={name} onChange={(e) => setName(e.target.value)} />
+            )}
+            <button onClick={attach} disabled={phone.replace(/\D/g, '').length < 8 || (joining && !consent)}>
+              {joining ? 'Join & attach' : 'Member'}
+            </button>
+          </div>
+          {joining && (
+            <div className="mt" style={{ marginTop: '0.4rem' }}>
+              <div className="muted small mb" style={{ marginBottom: '0.3rem' }}>
+                📋 Read to the customer: {loyalty.privacyNotice}
+              </div>
+              <label className="row small" style={{ gap: '0.4rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={consent}
+                  onChange={(e) => setConsent(e.target.checked)}
+                  style={{ width: 'auto' }}
+                />
+                Customer agrees to join the loyalty programme
+              </label>
+            </div>
           )}
-          <button onClick={attach} disabled={phone.replace(/\D/g, '').length < 8}>
-            {needName ? 'Join & attach' : 'Member'}
-          </button>
-        </div>
+        </>
       )}
       {error && <div className="error-text mt">{error}</div>}
     </div>

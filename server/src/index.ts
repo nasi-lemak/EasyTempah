@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import './db/connection'; // opens DB + applies migrations
 import { scheduleBackups } from './services/backup';
+import { purgeInactiveMembers } from './services/customers';
 import { requireAuth } from './middleware/auth';
 import { errorHandler } from './middleware/errors';
 import { addClient } from './realtime/bus';
@@ -73,6 +74,18 @@ if (fs.existsSync(clientDist)) {
 app.use(errorHandler);
 
 scheduleBackups();
+
+// PDPA retention: anonymise long-inactive members on boot and daily after.
+const runRetention = () => {
+  try {
+    const n = purgeInactiveMembers();
+    if (n > 0) console.log(`Loyalty retention: anonymised ${n} inactive member(s)`);
+  } catch (err) {
+    console.error('Loyalty retention purge failed', err);
+  }
+};
+runRetention();
+setInterval(runRetention, 24 * 60 * 60 * 1000).unref();
 
 const PORT = Number(process.env.PORT) || 4000;
 app.listen(PORT, () => {

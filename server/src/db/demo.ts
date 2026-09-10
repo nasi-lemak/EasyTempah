@@ -141,13 +141,14 @@ const wipeAndGenerate = db.transaction(() => {
     'Kok Meng', 'Siti', 'Ravi', 'Nurul', 'Jason', 'Zul',
   ];
   const insertCustomer = db.prepare(
-    'INSERT INTO customers (phone, name, points, visits, total_spent_cents, created_at, last_visit_at) VALUES (?, ?, 0, 0, 0, ?, NULL)',
+    // consent_at = created_at: demo members joined with the notice acknowledged
+    'INSERT INTO customers (phone, name, points, visits, total_spent_cents, created_at, last_visit_at, consent_at) VALUES (?, ?, 0, 0, 0, ?, NULL, ?)',
   );
   const windowStart = new Date();
   windowStart.setDate(windowStart.getDate() - DAYS_OF_HISTORY);
   const members = memberNames.map((name, i) => ({
     id: Number(
-      insertCustomer.run(`01${randInt(2, 9)}-${String(2000000 + i * 61237 + randInt(0, 9999)).padStart(7, '0')}`, name, toSql(windowStart)).lastInsertRowid,
+      insertCustomer.run(`01${randInt(2, 9)}-${String(2000000 + i * 61237 + randInt(0, 9999)).padStart(7, '0')}`, name, toSql(windowStart), toSql(windowStart)).lastInsertRowid,
     ),
     points: 0,
     visits: 0,
