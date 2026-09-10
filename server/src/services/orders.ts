@@ -15,6 +15,7 @@ import type {
 } from '../types';
 import { audit } from './audit';
 import { cashRoundingAdjustment, computeTotals } from './orderMath';
+import { bestPromo } from './promotions';
 import { getLoyaltySettings, getPlatformsSettings, getTaxSettings } from './settings';
 
 export interface OrderWithLines extends Order {
@@ -70,8 +71,21 @@ function requireOpenOrder(id: number): Order {
 function recomputeTotals(orderId: number): void {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as Order;
   const lines = db
-    .prepare("SELECT * FROM order_items WHERE order_id = ? AND status != 'cancelled'")
-    .all(orderId) as OrderItem[];
+    .prepare(
+      `SELECT oi.*, i.category_id FROM order_items oi
+       LEFT JOIN items i ON i.id = oi.item_id
+       WHERE oi.order_id = ? AND oi.status != 'cancelled'`,
+    )
+    .all(orderId) as (OrderItem & { category_id: number | null })[];
+  // Set-meal children are zero-priced carriers; only parent lines count for promos.
+  const promo = order.platform
+    ? { id: null, name: null, cents: 0 }
+    : bestPromo(
+        lines
+          .filter((l) => !l.parent_line_id)
+          .map((l) => ({ line_total_cents: l.line_total_cents, item_id: l.item_id, category_id: l.category_id })),
+        order.type,
+      );
   const totals = computeTotals({
     lines: lines.map((l) => ({
       qty: l.qty,
@@ -80,14 +94,19 @@ function recomputeTotals(orderId: number): void {
     })),
     discountType: order.discount_type,
     discountValue: order.discount_value,
+    promoCents: promo.cents,
     orderType: order.type,
     tax: getTaxSettings(),
   });
   const total = totals.total_cents + order.rounding_cents;
   db.prepare(
-    `UPDATE orders SET subtotal_cents = ?, discount_cents = ?, service_cents = ?,
-     tax_cents = ?, total_cents = ? WHERE id = ?`,
-  ).run(totals.subtotal_cents, totals.discount_cents, totals.service_cents, totals.tax_cents, total, orderId);
+    `UPDATE orders SET subtotal_cents = ?, discount_cents = ?, promo_id = ?, promo_name = ?,
+     promo_cents = ?, service_cents = ?, tax_cents = ?, total_cents = ? WHERE id = ?`,
+  ).run(
+    totals.subtotal_cents, totals.discount_cents,
+    totals.promo_cents > 0 ? promo.id : null, totals.promo_cents > 0 ? promo.name : null,
+    totals.promo_cents, totals.service_cents, totals.tax_cents, total, orderId,
+  );
 }
 
 function nextOrderNo(): string {

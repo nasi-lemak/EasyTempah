@@ -125,6 +125,7 @@ export function renderReceipt(
 
   p.cols('Subtotal', rm(order.subtotal_cents, sym));
   if (order.discount_cents > 0) p.cols('Discount', '-' + rm(order.discount_cents, sym));
+  if (order.promo_cents > 0) p.cols(order.promo_name ?? 'Promo', '-' + rm(order.promo_cents, sym));
   if (order.service_cents > 0) p.cols(tax.serviceLabel, rm(order.service_cents, sym));
   if (order.tax_cents > 0) p.cols(tax.taxLabel, rm(order.tax_cents, sym));
   if (order.rounding_cents !== 0) p.cols('Rounding', rm(order.rounding_cents, sym));

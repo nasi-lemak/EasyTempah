@@ -330,6 +330,9 @@ export default function Pos() {
             {order.discount_cents > 0 && (
               <div className="line"><span>Discount</span><span className="mono">-{money(order.discount_cents)}</span></div>
             )}
+            {order.promo_cents > 0 && (
+              <div className="line"><span>🏷 {order.promo_name ?? 'Promo'}</span><span className="mono">-{money(order.promo_cents)}</span></div>
+            )}
             {order.service_cents > 0 && (
               <div className="line"><span>{tax?.serviceLabel ?? 'Service'}</span><span className="mono">{money(order.service_cents)}</span></div>
             )}

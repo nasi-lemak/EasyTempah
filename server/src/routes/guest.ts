@@ -66,6 +66,8 @@ guestRouter.get('/:token/order', (req, res) => {
       status: order.status,
       subtotal_cents: order.subtotal_cents,
       discount_cents: order.discount_cents,
+      promo_name: order.promo_name,
+      promo_cents: order.promo_cents,
       service_cents: order.service_cents,
       tax_cents: order.tax_cents,
       total_cents: order.total_cents,

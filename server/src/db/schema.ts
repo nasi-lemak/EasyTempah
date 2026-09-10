@@ -405,6 +405,31 @@ const MIGRATIONS: string[] = [
   ALTER TABLE orders ADD COLUMN points_earned INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE orders ADD COLUMN points_redeemed INTEGER NOT NULL DEFAULT 0;
   `,
+  // v12 — promotions: scheduled automatic discounts (happy hour etc.), applied
+  // server-side during totals recompute and recorded on the order
+  `
+  CREATE TABLE promotions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    type TEXT NOT NULL CHECK (type IN ('percent','amount')),
+    value INTEGER NOT NULL CHECK (value > 0),
+    scope TEXT NOT NULL DEFAULT 'order' CHECK (scope IN ('order','category','item')),
+    category_id INTEGER REFERENCES categories(id),
+    item_id INTEGER REFERENCES items(id),
+    days_json TEXT NOT NULL DEFAULT '[0,1,2,3,4,5,6]',
+    start_time TEXT,
+    end_time TEXT,
+    starts_on TEXT,
+    ends_on TEXT,
+    order_types_json TEXT NOT NULL DEFAULT '["dine_in","takeaway","delivery"]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  ALTER TABLE orders ADD COLUMN promo_id INTEGER REFERENCES promotions(id);
+  ALTER TABLE orders ADD COLUMN promo_name TEXT;
+  ALTER TABLE orders ADD COLUMN promo_cents INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function applySchema(db: Database): void {

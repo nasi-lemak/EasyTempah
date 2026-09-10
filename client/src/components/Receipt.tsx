@@ -96,6 +96,12 @@ export default function Receipt({
           <span>-{money(order.discount_cents)}</span>
         </div>
       )}
+      {order.promo_cents > 0 && (
+        <div className="rrow">
+          <span>{order.promo_name ?? 'Promo'}</span>
+          <span>-{money(order.promo_cents)}</span>
+        </div>
+      )}
       {order.service_cents > 0 && (
         <div className="rrow">
           <span>{tax.serviceLabel}</span>

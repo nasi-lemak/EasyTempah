@@ -10,6 +10,7 @@ export interface TotalsInput {
   lines: LineInput[]; // active (non-cancelled) lines only
   discountType: 'percent' | 'fixed' | null;
   discountValue: number; // percent 0-100 or fixed cents
+  promoCents?: number; // automatic promotion discount, applied after the manual discount
   orderType: OrderType; // service charge applies only to configured order types
   tax: TaxSettings;
 }
@@ -17,6 +18,7 @@ export interface TotalsInput {
 export interface Totals {
   subtotal_cents: number;
   discount_cents: number;
+  promo_cents: number; // promo portion actually applied (capped at what's left of the subtotal)
   service_cents: number;
   tax_cents: number;
   total_cents: number; // before cash rounding
@@ -38,8 +40,9 @@ export function computeTotals(input: TotalsInput): Totals {
     discount = Math.max(0, input.discountValue);
   }
   discount = Math.min(discount, subtotal);
+  const promo = Math.min(Math.max(0, input.promoCents ?? 0), subtotal - discount);
 
-  const discounted = subtotal - discount;
+  const discounted = subtotal - discount - promo;
   const serviceApplies =
     input.tax.serviceRate > 0 && (input.tax.serviceOrderTypes ?? ['dine_in']).includes(input.orderType);
   const service = serviceApplies ? Math.round((discounted * input.tax.serviceRate) / 100) : 0;
@@ -49,6 +52,7 @@ export function computeTotals(input: TotalsInput): Totals {
   return {
     subtotal_cents: subtotal,
     discount_cents: discount,
+    promo_cents: promo,
     service_cents: service,
     tax_cents: tax,
     total_cents: discounted + service + tax,

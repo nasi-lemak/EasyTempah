@@ -29,6 +29,8 @@ interface GuestTab {
   status: string;
   subtotal_cents: number;
   discount_cents: number;
+  promo_name: string | null;
+  promo_cents: number;
   service_cents: number;
   tax_cents: number;
   total_cents: number;
@@ -295,6 +297,7 @@ export default function GuestOrder() {
           <div className="cart-totals" style={{ borderTop: '1px solid var(--border)', padding: '0.6rem 0 0' }}>
             <div className="line"><span>Subtotal</span><span className="mono">{money(tab.subtotal_cents)}</span></div>
             {tab.discount_cents > 0 && <div className="line"><span>Discount</span><span className="mono">-{money(tab.discount_cents)}</span></div>}
+            {tab.promo_cents > 0 && <div className="line"><span>🏷 {tab.promo_name ?? 'Promo'}</span><span className="mono">-{money(tab.promo_cents)}</span></div>}
             {tab.service_cents > 0 && <div className="line"><span>{info.tax.serviceLabel}</span><span className="mono">{money(tab.service_cents)}</span></div>}
             {tab.tax_cents > 0 && <div className="line"><span>{info.tax.taxLabel}</span><span className="mono">{money(tab.tax_cents)}</span></div>}
             <div className="line grand"><span>Total</span><span className="mono">{money(tab.total_cents)}</span></div>

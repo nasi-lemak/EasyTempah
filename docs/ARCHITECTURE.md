@@ -315,3 +315,30 @@ Safety properties:
 
 Going live from a demo install: reset once, then delete `server/data/` and run
 `npm run seed` for a clean database (the flag clears with the file).
+
+## Promotions
+
+Scheduled automatic discounts (`promotions` table, managed under Menu →
+Promos, manager+): percent or fixed amount; scoped to the whole order, a
+category or one item; targeted by weekday set, local time window (an end
+before the start means overnight, e.g. 22:00–02:00, matched against the
+current day's clock), inclusive date range and order types.
+
+Application lives in `recomputeTotals` — the same single choke-point as all
+other order math — via `bestPromo()` (`services/promotions.ts`, pure matching
+and discount functions, unit-tested): every active matching promotion is
+priced against the order's non-cancelled parent lines and the single best
+value wins; promotions never stack with each other but do combine with a
+manual discount (`computeTotals` clips `promoCents` to what remains of the
+subtotal, and the service-charge/tax base is reduced by both). The applied
+promotion is denormalized onto the order (`promo_id`, `promo_name`,
+`promo_cents`) so receipts and reports read it without joins, and it
+re-evaluates on every bill mutation — a promo locks in as rung and refreshes
+whenever lines or the discount change, not on a background clock.
+
+Exclusions and guards: platform orders never receive promotions (they settle
+at the platform's menu value); combo child lines are skipped (the parent
+carries the bundle price); deleting a promotion referenced by paid orders is
+refused (409) — deactivate it instead, preserving reporting history. Reports
+show promotions separately from manual discounts (summary `promos_cents`,
+per-order CSV columns).

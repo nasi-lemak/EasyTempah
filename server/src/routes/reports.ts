@@ -25,6 +25,7 @@ reportsRouter.get('/summary', (req, res) => {
     .prepare(
       `SELECT COUNT(*) AS orders, COALESCE(SUM(o.total_cents), 0) AS gross_cents,
               COALESCE(SUM(o.discount_cents), 0) AS discounts_cents,
+              COALESCE(SUM(o.promo_cents), 0) AS promos_cents,
               COALESCE(SUM(o.tax_cents), 0) AS tax_cents,
               COALESCE(SUM(o.service_cents), 0) AS service_cents,
               COALESCE(SUM(o.rounding_cents), 0) AS rounding_cents,
@@ -191,10 +192,12 @@ reportsRouter.get('/export', (req, res) => {
       .all(from, to) as (Record<string, string | number | null>)[];
     rows = [
       ['Order No', 'Opened', 'Closed', 'Type', 'Platform', 'Table', 'Status', 'Subtotal (RM)', 'Discount (RM)',
-        'Service (RM)', 'Tax (RM)', 'Rounding (RM)', 'Total (RM)', 'Refunded (RM)', 'Payment Channels', 'Opened By'],
+        'Promo', 'Promo (RM)', 'Service (RM)', 'Tax (RM)', 'Rounding (RM)', 'Total (RM)', 'Refunded (RM)',
+        'Payment Channels', 'Opened By'],
       ...data.map((o) => [
         o.order_no, o.opened_at, o.closed_at, o.type, o.platform, o.table_name, o.status,
-        rm(o.subtotal_cents as number), rm(o.discount_cents as number), rm(o.service_cents as number),
+        rm(o.subtotal_cents as number), rm(o.discount_cents as number),
+        o.promo_name, rm(o.promo_cents as number), rm(o.service_cents as number),
         rm(o.tax_cents as number), rm(o.rounding_cents as number), rm(o.total_cents as number),
         rm(o.refunded_cents as number), o.channels, o.opened_by_name,
       ]),

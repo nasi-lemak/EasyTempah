@@ -6,6 +6,7 @@ interface Summary {
   orders: number;
   gross_cents: number;
   discounts_cents: number;
+  promos_cents: number;
   tax_cents: number;
   service_cents: number;
   covers: number;
@@ -118,6 +119,7 @@ export default function Reports() {
           <div className="stat"><div className="label">Avg order</div><div className="value">{money(summary.avg_order_cents)}</div></div>
           <div className="stat"><div className="label">Covers</div><div className="value">{summary.covers}</div></div>
           <div className="stat"><div className="label">Discounts</div><div className="value">{money(summary.discounts_cents)}</div></div>
+          <div className="stat"><div className="label">Promotions</div><div className="value">{money(summary.promos_cents)}</div></div>
           <div className="stat"><div className="label">Tax collected</div><div className="value">{money(summary.tax_cents)}</div></div>
           <div className="stat"><div className="label">Service charge</div><div className="value">{money(summary.service_cents)}</div></div>
           <div className="stat"><div className="label">Voided orders</div><div className="value">{summary.void_orders}</div></div>

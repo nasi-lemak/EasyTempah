@@ -11,6 +11,7 @@ import type {
   Modifier,
   ModifierGroup,
   ModifierRecipeLine,
+  Promotion,
   RecipeLine,
 } from '../types';
 
@@ -107,7 +108,7 @@ const emptyItemForm = {
 export default function MenuAdmin() {
   const money = useMoney();
   const [menu, setMenu] = useState<AdminMenu | null>(null);
-  const [tab, setTab] = useState<'items' | 'categories' | 'modifiers'>('items');
+  const [tab, setTab] = useState<'items' | 'categories' | 'modifiers' | 'promos'>('items');
   const [itemForm, setItemForm] = useState<typeof emptyItemForm | null>(null);
   const [comboForm, setComboForm] = useState<ComboGroupForm[]>([]);
   const [recipeForm, setRecipeForm] = useState<RecipeForm[]>([]);
@@ -190,7 +191,7 @@ export default function MenuAdmin() {
     <div>
       <div className="row mb">
         <h1 className="grow">Menu Management</h1>
-        {(['items', 'categories', 'modifiers'] as const).map((t) => (
+        {(['items', 'categories', 'modifiers', 'promos'] as const).map((t) => (
           <button key={t} className={tab === t ? 'primary' : ''} onClick={() => setTab(t)}>
             {t[0].toUpperCase() + t.slice(1)}
           </button>
@@ -343,6 +344,8 @@ export default function MenuAdmin() {
         </div>
       )}
 
+      {tab === 'promos' && <PromosTab categories={menu.categories} items={menu.items} />}
+
       {itemForm && (
         <Modal title={itemForm.id ? `Edit ${itemForm.name}` : 'New item'} onClose={() => setItemForm(null)}>
           <label>Name</label>
@@ -480,6 +483,221 @@ export default function MenuAdmin() {
           >
             Save recipe
           </button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ---------- Promotions ----------
+
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const ALL_ORDER_TYPES = ['dine_in', 'takeaway', 'delivery'] as const;
+const TYPE_LABELS: Record<string, string> = { dine_in: 'Dine-in', takeaway: 'Takeaway', delivery: 'Delivery' };
+
+interface PromoForm {
+  id: number;
+  name: string;
+  active: boolean;
+  type: 'percent' | 'amount';
+  value: string; // percent, or RM for 'amount'
+  scope: 'order' | 'category' | 'item';
+  category_id: number;
+  item_id: number;
+  days: number[];
+  start_time: string;
+  end_time: string;
+  starts_on: string;
+  ends_on: string;
+  order_types: string[];
+}
+
+const emptyPromoForm: PromoForm = {
+  id: 0, name: '', active: true, type: 'percent', value: '', scope: 'order',
+  category_id: 0, item_id: 0, days: [0, 1, 2, 3, 4, 5, 6],
+  start_time: '', end_time: '', starts_on: '', ends_on: '',
+  order_types: [...ALL_ORDER_TYPES],
+};
+
+function describePromo(p: Promotion): string {
+  const off = p.type === 'percent' ? `${p.value}% off` : `RM ${(p.value / 100).toFixed(2)} off`;
+  const what = p.scope === 'order' ? 'whole order' : p.scope === 'category' ? (p.category_name ?? 'category') : (p.item_name ?? 'item');
+  const days = JSON.parse(p.days_json) as number[];
+  const daysTxt = days.length >= 7 ? 'daily' : days.map((d) => DAY_LABELS[d]).join(' ');
+  const timeTxt = p.start_time && p.end_time ? ` ${p.start_time}–${p.end_time}` : '';
+  const dateTxt = p.starts_on || p.ends_on ? ` (${p.starts_on ?? '…'} → ${p.ends_on ?? '…'})` : '';
+  return `${off} · ${what} · ${daysTxt}${timeTxt}${dateTxt}`;
+}
+
+function PromosTab({ categories, items }: { categories: Category[]; items: Item[] }) {
+  const [promos, setPromos] = useState<Promotion[]>([]);
+  const [form, setForm] = useState<PromoForm | null>(null);
+  const [error, setError] = useState('');
+
+  const load = useCallback(() => {
+    api.get<{ promotions: Promotion[] }>('/api/promotions').then((r) => setPromos(r.promotions)).catch(() => {});
+  }, []);
+  useEffect(load, [load]);
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setError('');
+    try {
+      await fn();
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    }
+  };
+
+  const save = () =>
+    run(async () => {
+      if (!form) return;
+      const body = {
+        name: form.name,
+        active: form.active,
+        type: form.type,
+        value: form.type === 'percent' ? Math.round(Number(form.value)) : Math.round(parseFloat(form.value || '0') * 100),
+        scope: form.scope,
+        category_id: form.scope === 'category' ? form.category_id || null : null,
+        item_id: form.scope === 'item' ? form.item_id || null : null,
+        days: form.days,
+        start_time: form.start_time || null,
+        end_time: form.end_time || null,
+        starts_on: form.starts_on || null,
+        ends_on: form.ends_on || null,
+        order_types: form.order_types,
+      };
+      if (form.id) await api.put(`/api/promotions/${form.id}`, body);
+      else await api.post('/api/promotions', body);
+      setForm(null);
+    });
+
+  const edit = (p: Promotion) =>
+    setForm({
+      id: p.id,
+      name: p.name,
+      active: !!p.active,
+      type: p.type,
+      value: p.type === 'percent' ? String(p.value) : (p.value / 100).toFixed(2),
+      scope: p.scope,
+      category_id: p.category_id ?? 0,
+      item_id: p.item_id ?? 0,
+      days: JSON.parse(p.days_json) as number[],
+      start_time: p.start_time ?? '',
+      end_time: p.end_time ?? '',
+      starts_on: p.starts_on ?? '',
+      ends_on: p.ends_on ?? '',
+      order_types: JSON.parse(p.order_types_json) as string[],
+    });
+
+  return (
+    <div>
+      <div className="row mb">
+        <button className="primary" onClick={() => setForm({ ...emptyPromoForm })}>+ New promotion</button>
+        <span className="muted small">The single best-value active promotion applies per order; platform orders are excluded.</span>
+      </div>
+      {error && <div className="error-text mb">{error}</div>}
+      {promos.length === 0 && <div className="muted">No promotions yet. Try a weekday happy hour on Drinks.</div>}
+      {promos.map((p) => (
+        <div key={p.id} className="panel row mb" style={{ alignItems: 'center', padding: '0.6rem 0.8rem' }}>
+          <div className="grow">
+            <strong>{p.name}</strong>{!p.active && <span className="muted"> (off)</span>}
+            <div className="muted small">{describePromo(p)}</div>
+          </div>
+          <button onClick={() => run(() => api.put(`/api/promotions/${p.id}`, { active: !p.active }))}>
+            {p.active ? 'Deactivate' : 'Activate'}
+          </button>
+          <button onClick={() => edit(p)}>Edit</button>
+          <button className="ghost" onClick={() => run(() => api.delete(`/api/promotions/${p.id}`))}>Delete</button>
+        </div>
+      ))}
+
+      {form && (
+        <Modal title={form.id ? `Edit ${form.name}` : 'New promotion'} onClose={() => setForm(null)}>
+          <label>Name</label>
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={{ width: '100%' }} className="mb" placeholder="Happy Hour" />
+          <div className="row mb">
+            <button className={form.type === 'percent' ? 'primary' : ''} onClick={() => setForm({ ...form, type: 'percent' })}>Percent %</button>
+            <button className={form.type === 'amount' ? 'primary' : ''} onClick={() => setForm({ ...form, type: 'amount' })}>Amount RM</button>
+            <input
+              inputMode="decimal"
+              placeholder={form.type === 'percent' ? '%' : 'RM'}
+              value={form.value}
+              onChange={(e) => setForm({ ...form, value: e.target.value })}
+              style={{ width: 90 }}
+            />
+          </div>
+          <label>Applies to</label>
+          <div className="row mb wrap">
+            <button className={form.scope === 'order' ? 'primary' : ''} onClick={() => setForm({ ...form, scope: 'order' })}>Whole order</button>
+            <button className={form.scope === 'category' ? 'primary' : ''} onClick={() => setForm({ ...form, scope: 'category' })}>Category</button>
+            <button className={form.scope === 'item' ? 'primary' : ''} onClick={() => setForm({ ...form, scope: 'item' })}>Item</button>
+            {form.scope === 'category' && (
+              <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: Number(e.target.value) })}>
+                <option value={0}>Choose category…</option>
+                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            )}
+            {form.scope === 'item' && (
+              <select value={form.item_id} onChange={(e) => setForm({ ...form, item_id: Number(e.target.value) })}>
+                <option value={0}>Choose item…</option>
+                {items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </select>
+            )}
+          </div>
+          <label>Days</label>
+          <div className="row mb wrap">
+            {DAY_LABELS.map((d, i) => (
+              <button
+                key={d}
+                className={form.days.includes(i) ? 'primary' : ''}
+                onClick={() =>
+                  setForm({
+                    ...form,
+                    days: form.days.includes(i) ? form.days.filter((x) => x !== i) : [...form.days, i],
+                  })
+                }
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+          <label>Time window (blank = all day; end before start = overnight)</label>
+          <div className="row mb">
+            <input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
+            <span className="muted">to</span>
+            <input type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} />
+          </div>
+          <label>Date range (optional)</label>
+          <div className="row mb">
+            <input type="date" value={form.starts_on} onChange={(e) => setForm({ ...form, starts_on: e.target.value })} />
+            <span className="muted">to</span>
+            <input type="date" value={form.ends_on} onChange={(e) => setForm({ ...form, ends_on: e.target.value })} />
+          </div>
+          <label>Order types</label>
+          <div className="row mb wrap">
+            {ALL_ORDER_TYPES.map((t) => (
+              <button
+                key={t}
+                className={form.order_types.includes(t) ? 'primary' : ''}
+                onClick={() =>
+                  setForm({
+                    ...form,
+                    order_types: form.order_types.includes(t)
+                      ? form.order_types.filter((x) => x !== t)
+                      : [...form.order_types, t],
+                  })
+                }
+              >
+                {TYPE_LABELS[t]}
+              </button>
+            ))}
+          </div>
+          <label className="row mb" style={{ gap: '0.4rem' }}>
+            <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
+            Active
+          </label>
+          <button className="primary" onClick={save}>{form.id ? 'Save promotion' : 'Create promotion'}</button>
         </Modal>
       )}
     </div>

@@ -193,6 +193,9 @@ export interface Order {
   customer_points: number | null;
   points_earned: number;
   points_redeemed: number;
+  promo_id: number | null;
+  promo_name: string | null;
+  promo_cents: number;
   items: OrderItem[];
   payments: Payment[];
   refunds: Refund[];
@@ -237,6 +240,27 @@ export interface LoyaltySettings {
   earnPointsPerRm: number;
   redeemPointsPerRm: number;
   minRedeemPoints: number;
+}
+
+/** Scheduled automatic discount (happy hour etc.), managed under Menu → Promos. */
+export interface Promotion {
+  id: number;
+  name: string;
+  active: number;
+  type: 'percent' | 'amount';
+  value: number; // percent 1-100, or cents for 'amount'
+  scope: 'order' | 'category' | 'item';
+  category_id: number | null;
+  item_id: number | null;
+  category_name?: string | null;
+  item_name?: string | null;
+  days_json: string;
+  start_time: string | null;
+  end_time: string | null;
+  starts_on: string | null;
+  ends_on: string | null;
+  order_types_json: string;
+  created_at: string;
 }
 
 /** Set by `npm run seed:demo`; shows the DEMO DATA badge while enabled. */

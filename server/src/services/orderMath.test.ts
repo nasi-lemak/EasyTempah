@@ -41,6 +41,7 @@ describe('computeTotals', () => {
     expect(t).toEqual({
       subtotal_cents: 1000,
       discount_cents: 0,
+      promo_cents: 0,
       service_cents: 0,
       tax_cents: 0,
       total_cents: 1000,

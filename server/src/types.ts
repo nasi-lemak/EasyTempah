@@ -135,6 +135,28 @@ export interface Order {
   customer_id: number | null;
   points_earned: number;
   points_redeemed: number;
+  promo_id: number | null; // best matching scheduled promotion, applied automatically
+  promo_name: string | null;
+  promo_cents: number;
+}
+
+/** Scheduled automatic discount (e.g. happy hour). Times/dates are local wall clock. */
+export interface Promotion {
+  id: number;
+  name: string;
+  active: number;
+  type: 'percent' | 'amount';
+  value: number; // percent 1-100, or cents for 'amount'
+  scope: 'order' | 'category' | 'item';
+  category_id: number | null;
+  item_id: number | null;
+  days_json: string; // JSON number[] of weekdays, 0 = Sunday
+  start_time: string | null; // 'HH:MM'; null with end_time null = all day
+  end_time: string | null; // exclusive; end <= start means an overnight window
+  starts_on: string | null; // 'YYYY-MM-DD' inclusive
+  ends_on: string | null; // inclusive
+  order_types_json: string; // JSON OrderType[]
+  created_at: string;
 }
 
 export interface Customer {
