@@ -1,8 +1,34 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { KdsLine, KdsTicket, Station } from '../types';
 import { minutesSince } from '../time';
 import { useEvents } from '../useEvents';
+
+const CHIME_KEY = 'easytempah.kdsChime';
+
+/** Two-tone kitchen chime, synthesized — no audio asset, works offline. */
+function chime() {
+  try {
+    const ctx = new AudioContext();
+    const play = (freq: number, at: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + at);
+      gain.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.5);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(ctx.currentTime + at);
+      osc.stop(ctx.currentTime + at + 0.55);
+    };
+    play(880, 0);
+    play(1174, 0.18);
+    setTimeout(() => ctx.close(), 1200);
+  } catch {
+    /* audio unavailable (e.g. no user gesture yet) — stay silent */
+  }
+}
 
 const NEXT_LABEL: Record<string, string> = {
   sent: 'Start',
@@ -21,10 +47,33 @@ export default function Kds() {
   const [showRecall, setShowRecall] = useState(false);
   const [recent, setRecent] = useState<RecentLine[]>([]);
   const [, forceTick] = useState(0);
+  const [sound, setSound] = useState(() => {
+    try {
+      return localStorage.getItem(CHIME_KEY) !== 'off';
+    } catch {
+      return true;
+    }
+  });
+  const knownLines = useRef<Set<number> | null>(null);
+  const soundRef = useRef(sound);
+  soundRef.current = sound;
 
   const load = useCallback(() => {
     const q = station === 'all' ? '' : `?station=${station}`;
-    api.get<{ tickets: KdsTicket[] }>(`/api/kds/tickets${q}`).then((r) => setTickets(r.tickets)).catch(() => {});
+    api.get<{ tickets: KdsTicket[] }>(`/api/kds/tickets${q}`).then((r) => {
+      setTickets(r.tickets);
+      // Chime on genuinely new lines — not on the first load or on bumps.
+      const ids = new Set(r.tickets.flatMap((t) => t.lines.map((l) => l.id)));
+      if (knownLines.current && soundRef.current) {
+        for (const id of ids) {
+          if (!knownLines.current.has(id)) {
+            chime();
+            break;
+          }
+        }
+      }
+      knownLines.current = ids;
+    }).catch(() => {});
     api.get<{ lines: RecentLine[] }>('/api/kds/recent').then((r) => setRecent(r.lines)).catch(() => {});
   }, [station]);
   useEffect(load, [load]);
@@ -54,6 +103,19 @@ export default function Kds() {
         ))}
         <button className={showRecall ? 'primary' : ''} onClick={() => setShowRecall(!showRecall)}>
           Recall{recent.length > 0 ? ` (${recent.length})` : ''}
+        </button>
+        <button
+          title="Chime when a new ticket arrives"
+          onClick={() => {
+            const next = !sound;
+            setSound(next);
+            try {
+              localStorage.setItem(CHIME_KEY, next ? 'on' : 'off');
+            } catch { /* per-device convenience */ }
+            if (next) chime(); // audible confirmation + unlocks audio on this device
+          }}
+        >
+          {sound ? '🔔 Sound on' : '🔕 Muted'}
         </button>
       </div>
 

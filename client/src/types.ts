@@ -113,6 +113,8 @@ export interface DiningTable {
   order_opened_at: string | null;
   cooking_lines: number | null;
   ready_lines: number | null;
+  call_reason: 'service' | 'bill' | null; // unacknowledged guest call-waiter request
+  call_at: string | null;
 }
 
 export interface ModifierSnapshot {

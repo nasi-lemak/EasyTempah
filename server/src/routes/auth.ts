@@ -27,16 +27,19 @@ setInterval(() => {
   }
 }, 60_000).unref();
 
-authRouter.post('/login', (req, res) => {
+/**
+ * Shared PIN check with per-IP lockout. Returns the matched user, or null
+ * after writing the 429/401 response itself.
+ */
+function pinToUser(req: { ip?: string; body: unknown }, res: { status: (n: number) => { json: (b: unknown) => void } }): User | null {
   const ip = req.ip ?? 'unknown';
   const now = Date.now();
   const entry = failures.get(ip);
   if (entry && entry.lockedUntil > now) {
     const wait = Math.ceil((entry.lockedUntil - now) / 1000);
     res.status(429).json({ error: `Too many failed attempts — try again in ${wait}s` });
-    return;
+    return null;
   }
-
   const { pin } = req.body as { pin?: string };
   if (!pin || typeof pin !== 'string' || !/^\d{4,8}$/.test(pin)) {
     throw badRequest('PIN must be 4-8 digits');
@@ -56,12 +59,39 @@ authRouter.post('/login', (req, res) => {
     }
     failures.set(ip, cur);
     res.status(401).json({ error: 'Invalid PIN' });
-    return;
+    return null;
   }
   failures.delete(ip);
+  return user;
+}
+
+authRouter.post('/login', (req, res) => {
+  const user = pinToUser(req, res);
+  if (!user) return;
   const token = createSession(user.id);
   audit(user.id, 'auth.login');
   res.json({ token, user: { id: user.id, name: user.name, role: user.role } });
+});
+
+/**
+ * Time clock: the PIN identifies the person and toggles their open entry —
+ * no session is created, so anyone can clock in/out from the login screen.
+ */
+authRouter.post('/clock', (req, res) => {
+  const user = pinToUser(req, res);
+  if (!user) return;
+  const open = db
+    .prepare('SELECT id, clock_in FROM time_clock WHERE user_id = ? AND clock_out IS NULL ORDER BY id DESC LIMIT 1')
+    .get(user.id) as { id: number; clock_in: string } | undefined;
+  if (open) {
+    db.prepare("UPDATE time_clock SET clock_out = datetime('now') WHERE id = ?").run(open.id);
+    audit(user.id, 'clock.out');
+    res.json({ name: user.name, action: 'out', since: open.clock_in });
+  } else {
+    db.prepare('INSERT INTO time_clock (user_id) VALUES (?)').run(user.id);
+    audit(user.id, 'clock.in');
+    res.json({ name: user.name, action: 'in' });
+  }
 });
 
 authRouter.post('/logout', requireAuth, (req: AuthedRequest, res) => {

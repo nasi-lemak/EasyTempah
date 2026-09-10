@@ -49,6 +49,9 @@ export default function Reports() {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [hours, setHours] = useState<HourRow[]>([]);
   const [cashiers, setCashiers] = useState<CashierRow[]>([]);
+  const [staffHours, setStaffHours] = useState<
+    { id: number; name: string; role: string; entries: number; hours: number; still_in: number }[]
+  >([]);
   const [error, setError] = useState('');
   const token = useStore((s) => s.token);
 
@@ -61,13 +64,15 @@ export default function Reports() {
       api.get<{ payments: PaymentRow[] }>(`/api/reports/payments${q}`),
       api.get<{ hours: HourRow[] }>(`/api/reports/hourly${q}`),
       api.get<{ cashiers: CashierRow[] }>(`/api/reports/cashiers${q}`),
+      api.get<{ staff: typeof staffHours }>(`/api/reports/hours${q}`),
     ])
-      .then(([s, i, p, h, c]) => {
+      .then(([s, i, p, h, c, sh]) => {
         setSummary(s);
         setItems(i.items);
         setPayments(p.payments);
         setHours(h.hours);
         setCashiers(c.cashiers);
+        setStaffHours(sh.staff);
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load reports'));
   }, [from, to]);
@@ -194,6 +199,28 @@ export default function Reports() {
                   <td className="num" style={{ color: c.refunded_cents ? 'var(--danger)' : undefined }}>
                     {c.refunded_cents ? money(c.refunded_cents) : '—'}
                   </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {staffHours.length > 0 && (
+        <div className="panel mt">
+          <h2>Staff hours (time clock)</h2>
+          <table className="data">
+            <thead>
+              <tr><th>Staff</th><th>Role</th><th className="num">Entries</th><th className="num">Hours</th><th></th></tr>
+            </thead>
+            <tbody>
+              {staffHours.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.name}</td>
+                  <td className="muted">{s.role}</td>
+                  <td className="num">{s.entries}</td>
+                  <td className="num">{s.hours.toFixed(1)}</td>
+                  <td>{s.still_in > 0 && <span className="badge open">on the clock</span>}</td>
                 </tr>
               ))}
             </tbody>

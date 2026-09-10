@@ -87,6 +87,11 @@ export default function Receipt({
         <span>#{order.order_no}</span>
         <span>{order.type === 'dine_in' ? `${L('table')} ${order.table_name ?? ''}` : order.type === 'takeaway' ? L('takeaway') : L('delivery')}</span>
       </div>
+      {order.type === 'takeaway' && (
+        <div className="center" style={{ fontSize: 22, fontWeight: 800, margin: '2px 0' }}>
+          {L('queue')} {parseInt(order.order_no.split('-')[1] ?? '0', 10) || 0}
+        </div>
+      )}
       {order.receipt_no && (
         <div className="rrow">
           <span>{L('receipt_no')}</span>

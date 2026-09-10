@@ -26,6 +26,7 @@ export type LabelKey =
   | 'points_balance'
   | 'refund'
   | 'reg_no'
+  | 'queue'
   | 'einvoice';
 
 const STRINGS: Record<ReceiptLang, Record<LabelKey, string>> = {
@@ -45,6 +46,7 @@ const STRINGS: Record<ReceiptLang, Record<LabelKey, string>> = {
     points_balance: 'Points balance',
     refund: 'REFUND',
     reg_no: 'Reg',
+    queue: 'Queue No',
     einvoice: 'LHDN e-Invoice',
   },
   ms: {
@@ -63,6 +65,7 @@ const STRINGS: Record<ReceiptLang, Record<LabelKey, string>> = {
     points_balance: 'Baki mata',
     refund: 'BAYARAN BALIK',
     reg_no: 'No. Pend.',
+    queue: 'No. Giliran',
     einvoice: 'e-Invois LHDN',
   },
   zh: {
@@ -81,6 +84,7 @@ const STRINGS: Record<ReceiptLang, Record<LabelKey, string>> = {
     points_balance: '积分余额',
     refund: '退款',
     reg_no: '注册号',
+    queue: '取餐号',
     einvoice: 'LHDN 电子发票',
   },
 };

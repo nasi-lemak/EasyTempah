@@ -14,11 +14,13 @@ kitchen displays and the back office, all over the local network.
 - Menu item photos: upload any image on an item — it is center-cropped square and compressed on the device before upload (WebP, JPEG fallback; ~40 KB each), stored in the database so backups carry it, shown as thumbnails on POS tiles and on the guest QR photo menu
 - Set meals / combos: bundle-priced items with choice groups (e.g. "Drink: Teh Tarik / +RM1.50 Milo"); the bill shows one set line while each chosen component routes to its own kitchen/bar station and deducts its own stock. Sets edit/cancel/split as a unit, work from QR guest ordering too, and are configured in the menu admin
 - Order-level discounts (percent/fixed, manager-gated above 20%), order notes, table transfer
+- Open items: ring up off-menu one-offs (name + price + station) — printed, reported and audited like any line
+- Takeaway queue numbers printed big on receipts for counter calling
 - Scheduled promotions: happy hours and deals (percent or RM off; whole order, a category or a single item) with weekday, time-window (overnight supported), date-range and order-type targeting — applied automatically at the till, shown by name in the cart and on receipts, reported separately from manual discounts, and managed under Menu → Promos. The single best-value promotion applies per order; platform orders are excluded
 - Split bills by items: move chosen items (whole or partial quantities) onto sibling bills on the same table; each bill recalculates its own charges and the table frees only when every bill is settled. Split by amount also supported
 - Payments: cash (tendered/change), card, and named e-wallet channels (Touch 'n Go, GrabPay, Boost, ShopeePay, DuitNow QR — configurable in Settings) with an on-screen scan-to-pay QR; split bills by amount; Malaysian 5-sen cash rounding (configurable). Shift and reports break sales down per channel while drawer math stays keyed on cash
 - Refunds (partial or full) with a manager-approval flow: managers refund directly, cashiers approve with a manager's PIN; refunds hit the drawer, shift reconciliation and reports
-- QR table ordering: guests scan a per-table code, browse the menu on their phone and send orders straight to the kitchen — items land on the table's tab marked 📱, guests watch their live tab with exact totals, and payment stays at the counter. Managers print the QR sheet and can rotate a table's code to invalidate printed ones
+- QR table ordering: guests scan a per-table code, browse the menu on their phone and send orders straight to the kitchen — items land on the table's tab marked 📱, guests watch their live tab with exact totals, and payment stays at the counter. Guests can also call a waiter or ask for the bill from their phone — a bell banner appears on the staff Tables screen. Managers print the QR sheet and can rotate a table's code to invalidate printed ones
 - Payment gateway scaffold with webhook auto-confirmation: cashier requests a wallet/card payment, the till shows the QR and waits, and the payment confirms itself when the gateway's HMAC-signed webhook arrives — exact matching for dynamic per-transaction QRs, amount+time-window matching (with ambiguity refusal) for a static counter QR, replay protection, and a built-in mock provider that simulates the whole loop for testing. Manual sighted confirmation remains as fallback
 - LHDN MyInvois e-invoicing: buyer-requested individual e-invoices captured at the till (TIN/ID validation, UBL 2.1 JSON, submission + validation tracking, MyInvois QR and UUID on the receipt), one-click monthly consolidated e-invoices for walk-in receipts, and automatic credit notes (type 02, referencing the original document) when an e-invoiced sale is refunded. Environments: built-in mock simulator for testing, MyInvois sandbox, and production
 - ESC/POS thermal printing over the network (raw port 9100): kitchen and bar tickets print automatically per station when orders are sent (QR guest orders included), receipts print from the payment screen with optional cash-drawer kick, and Settings has per-printer config with a test button. Browser printing remains as a fallback
@@ -26,15 +28,19 @@ kitchen displays and the back office, all over the local network.
 
 **Kitchen**
 - Real-time Kitchen Display System with per-station routing (kitchen / bar)
+- New-ticket chime (synthesized, per-screen mute) so the kitchen hears orders arrive
 - Ticket aging with color thresholds, per-line and whole-ticket bumping
   (`sent → preparing → ready → served`), and a recall list to un-bump recently served lines
 
 **Cash control**
 - Shift sessions with opening float, paid-in/paid-out movements
+- Drawer counting by denomination at close, with live variance before committing
+- Staff time clock: clock in/out by PIN from the login screen (no sign-in), hours per staff on Reports
 - Live X-report (sales by method, expected drawer) and end-of-shift
   reconciliation with variance tracking
 
 **Back office**
+- Order search across all days by order / receipt / platform number
 - Sales reports: summary KPIs, hourly chart, top items, payment mix, order-type split, per-staff attribution (orders opened, collected, refunds given — also on the live shift X-report), and one-click CSV exports (orders / items / payments) for the accountant
 - Menu management (categories, items, modifier groups) without restarts — changes push live to terminals
 - Inventory: per-item stock tracking, automatic deduction on kitchen send, restock on void/cancel, adjustment audit trail, low-stock badges and sold-out lockout on the POS

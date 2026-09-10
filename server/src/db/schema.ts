@@ -445,6 +445,26 @@ const MIGRATIONS: string[] = [
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   `,
+  // v15 — guest call-waiter requests, and staff time clock
+  `
+  CREATE TABLE service_calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    table_id INTEGER NOT NULL REFERENCES dining_tables(id),
+    reason TEXT NOT NULL DEFAULT 'service' CHECK (reason IN ('service','bill')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    acked_at TEXT,
+    acked_by INTEGER REFERENCES users(id)
+  );
+  CREATE INDEX idx_service_calls_open ON service_calls(table_id) WHERE acked_at IS NULL;
+
+  CREATE TABLE time_clock (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    clock_in TEXT NOT NULL DEFAULT (datetime('now')),
+    clock_out TEXT
+  );
+  CREATE INDEX idx_time_clock_user ON time_clock(user_id);
+  `,
 ];
 
 export function applySchema(db: Database): void {

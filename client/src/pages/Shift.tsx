@@ -209,17 +209,64 @@ export default function ShiftPage() {
       {showClose && summary && (
         <Modal title="Close shift" onClose={() => setShowClose(false)}>
           <p className="muted small">
-            Expected cash in drawer: <strong>{money(summary.expected_cash_cents)}</strong>. Count the drawer and
-            enter the actual amount — the variance is recorded.
+            Expected cash in drawer: <strong>{money(summary.expected_cash_cents)}</strong>. Count the drawer
+            by denomination (or type the total) — the variance is recorded.
           </p>
+          <DenominationCounter onTotal={(c) => setAmountStr((c / 100).toFixed(2))} />
           <label>Counted cash (RM)</label>
           <input inputMode="decimal" value={amountStr} onChange={(e) => setAmountStr(e.target.value)} style={{ width: '100%' }} className="mb" />
+          {amountStr && (
+            <div className="muted small mb">
+              Variance vs expected:{' '}
+              <strong style={{ color: cents() === summary.expected_cash_cents ? 'var(--accent)' : 'var(--warn)' }}>
+                {money(cents() - summary.expected_cash_cents)}
+              </strong>
+            </div>
+          )}
           <label>Notes</label>
           <input value={notes} onChange={(e) => setNotes(e.target.value)} style={{ width: '100%' }} />
           <button className="danger mt" onClick={doClose}>Close shift</button>
           {error && <div className="error-text mt">{error}</div>}
         </Modal>
       )}
+    </div>
+  );
+}
+
+/** Count the drawer note by note; the sum lands in the counted-cash field. */
+function DenominationCounter({ onTotal }: { onTotal: (cents: number) => void }) {
+  const DENOMS = [
+    { label: 'RM100', cents: 10000 }, { label: 'RM50', cents: 5000 },
+    { label: 'RM20', cents: 2000 }, { label: 'RM10', cents: 1000 },
+    { label: 'RM5', cents: 500 }, { label: 'RM1', cents: 100 },
+    { label: '50¢', cents: 50 }, { label: '20¢', cents: 20 },
+    { label: '10¢', cents: 10 }, { label: '5¢', cents: 5 },
+  ];
+  const [counts, setCounts] = useState<Record<string, string>>({});
+  const total = DENOMS.reduce((s, d) => s + d.cents * (parseInt(counts[d.label] || '0', 10) || 0), 0);
+  return (
+    <div className="panel mb" style={{ padding: '0.6rem 0.8rem' }}>
+      <div className="row wrap" style={{ gap: '0.45rem' }}>
+        {DENOMS.map((d) => (
+          <label key={d.label} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span className="small" style={{ width: 46, textAlign: 'right' }}>{d.label} ×</span>
+            <input
+              inputMode="numeric"
+              value={counts[d.label] ?? ''}
+              placeholder="0"
+              style={{ width: 52, padding: '0.3rem 0.4rem' }}
+              onChange={(e) => {
+                const next = { ...counts, [d.label]: e.target.value.replace(/\D/g, '') };
+                setCounts(next);
+                onTotal(DENOMS.reduce((s, x) => s + x.cents * (parseInt(next[x.label] || '0', 10) || 0), 0));
+              }}
+            />
+          </label>
+        ))}
+      </div>
+      <div className="right small mt" style={{ fontWeight: 700 }}>
+        Counted: RM {(total / 100).toFixed(2)}
+      </div>
     </div>
   );
 }

@@ -88,6 +88,25 @@ guestRouter.get('/:token/order', (req, res) => {
   });
 });
 
+/** Call a waiter to the table (water, help, or the bill). Rate-limited per table. */
+guestRouter.post('/:token/call', (req, res) => {
+  const token = requireToken(req.params.token);
+  const { table } = guestTableState(token);
+  const reason = (req.body as { reason?: string }).reason === 'bill' ? 'bill' : 'service';
+  const recent = db
+    .prepare(
+      "SELECT 1 FROM service_calls WHERE table_id = ? AND created_at > datetime('now', '-30 seconds')",
+    )
+    .get(table.id);
+  if (recent) {
+    res.status(429).json({ error: 'Already called — someone is on the way' });
+    return;
+  }
+  db.prepare('INSERT INTO service_calls (table_id, reason) VALUES (?, ?)').run(table.id, reason);
+  publish('tables');
+  res.status(201).json({ ok: true });
+});
+
 guestRouter.post('/:token/order', (req, res) => {
   const token = requireToken(req.params.token);
   const lines = (req.body as { lines?: AddLineInput[] }).lines;

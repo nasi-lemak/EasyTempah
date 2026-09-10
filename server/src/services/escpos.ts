@@ -222,6 +222,11 @@ export function renderReceipt(
         ? L.takeaway
         : L.delivery;
   p.cols(`#${order.order_no}`, where);
+  if (order.type === 'takeaway') {
+    // Big queue number so counter staff can call the order.
+    const queue = String(parseInt(order.order_no.split('-')[1] ?? '0', 10) || 0);
+    p.align('center').bold(true).size(2).line(`${L.queue} ${queue}`).size(1).bold(false).align('left');
+  }
   if (order.receipt_no) p.cols(`${L.receipt_no}:`, order.receipt_no);
   p.cols(new Date().toLocaleString('en-MY', { hour12: false }), order.opened_by_name ?? '');
   p.rule();

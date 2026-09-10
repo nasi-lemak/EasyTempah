@@ -130,6 +130,31 @@ export default function Tables() {
       </div>
       {error && <div className="error-text mb">{error}</div>}
 
+      {tables.filter((t) => t.call_reason).map((t) => (
+        <div
+          key={`call-${t.id}`}
+          className="row mb"
+          style={{
+            background: 'color-mix(in srgb, var(--warn) 14%, transparent)',
+            border: '1px solid var(--warn)', borderRadius: 10, padding: '0.55rem 0.9rem',
+          }}
+        >
+          <span className="grow">
+            🔔 <strong>Table {t.name}</strong> is calling — {t.call_reason === 'bill' ? 'wants the bill' : 'needs service'}
+            <span className="muted small"> · {age(t.call_at)}</span>
+          </span>
+          <button
+            className="primary"
+            onClick={async () => {
+              await api.post(`/api/tables/${t.id}/ack-call`);
+              load();
+            }}
+          >
+            On my way
+          </button>
+        </div>
+      ))}
+
       {view === 'floor' ? (
         <>
           <div className="row wrap mb">
@@ -399,6 +424,7 @@ function FloorPlan({
               title={occupied ? `#${t.order_no} · ${t.covers} pax · ${age(t.order_opened_at)}` : `${t.seats} seats — tap to seat`}
             >
               {occupied && (ready || cooking) && <span className={`dot ${ready ? 'ready' : 'cooking'}`} />}
+              {t.call_reason && <span className="call-bell" title="Guest is calling">🔔</span>}
               <span className="tname">{t.name}</span>
               {occupied ? (
                 <>

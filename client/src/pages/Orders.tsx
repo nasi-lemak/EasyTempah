@@ -22,6 +22,7 @@ export default function Orders() {
   const printers = useStore((s) => s.printers);
   const [status, setStatus] = useState<'all' | 'open' | 'paid' | 'void'>('all');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [q, setQ] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [receipt, setReceipt] = useState<{
     order: Order;
@@ -40,13 +41,18 @@ export default function Orders() {
   const load = useCallback(() => {
     const params = new URLSearchParams();
     if (status !== 'all') params.set('status', status);
-    if (date) params.set('date', date);
+    // A search spans all dates; the date filter applies only when not searching.
+    if (q.trim()) params.set('q', q.trim());
+    else if (date) params.set('date', date);
     api
       .get<{ orders: Order[] }>(`/api/orders?${params}`)
       .then((r) => setOrders(r.orders))
       .catch(() => {});
-  }, [status, date]);
-  useEffect(load, [load]);
+  }, [status, date, q]);
+  useEffect(() => {
+    const t = setTimeout(load, q ? 250 : 0); // debounce keystrokes
+    return () => clearTimeout(t);
+  }, [load, q]);
   useEvents(['orders'], load);
 
   const openReceipt = async (orderId: number) => {
@@ -80,7 +86,13 @@ export default function Orders() {
     <div>
       <div className="row mb wrap">
         <h1 className="grow">Orders</h1>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <input
+          placeholder="Search order / receipt / platform no."
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          style={{ width: 250 }}
+        />
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={!!q.trim()} />
         {(['all', 'open', 'paid', 'void'] as const).map((s) => (
           <button key={s} className={status === s ? 'primary' : ''} onClick={() => setStatus(s)}>
             {s[0].toUpperCase() + s.slice(1)}

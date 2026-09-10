@@ -157,6 +157,22 @@ reportsRouter.get('/cashiers', (req, res) => {
   res.json({ from, to, cashiers: rows.filter((r) => r.orders_opened || r.payments_taken || r.refunded_cents) });
 });
 
+/** Staff hours from the time clock. Entries still open count up to "now". */
+reportsRouter.get('/hours', (req, res) => {
+  const { from, to } = dateRange(req);
+  const rows = db
+    .prepare(
+      `SELECT u.id, u.name, u.role, COUNT(*) AS entries,
+        SUM((julianday(COALESCE(tc.clock_out, datetime('now'))) - julianday(tc.clock_in)) * 24.0) AS hours,
+        SUM(CASE WHEN tc.clock_out IS NULL THEN 1 ELSE 0 END) AS still_in
+       FROM time_clock tc JOIN users u ON u.id = tc.user_id
+       WHERE date(tc.clock_in, 'localtime') BETWEEN ? AND ?
+       GROUP BY u.id ORDER BY hours DESC`,
+    )
+    .all(from, to);
+  res.json({ from, to, staff: rows });
+});
+
 // ---- CSV exports (for the accountant) ----
 
 function csv(rows: (string | number | null | undefined)[][]): string {

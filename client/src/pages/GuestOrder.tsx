@@ -60,6 +60,21 @@ async function guestGet<T>(path: string): Promise<T> {
 export default function GuestOrder() {
   const { token } = useParams();
   const [info, setInfo] = useState<GuestInfo | null>(null);
+  const [called, setCalled] = useState<'service' | 'bill' | null>(null);
+
+  const callWaiter = async (reason: 'service' | 'bill') => {
+    try {
+      await fetch(`/api/guest/${token}/call`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      setCalled(reason);
+      setTimeout(() => setCalled(null), 45_000); // allow calling again later
+    } catch {
+      /* offline — the button simply stays available */
+    }
+  };
   const [tab, setTab] = useState<GuestTab | null>(null);
   const [activeCat, setActiveCat] = useState<number | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -214,6 +229,15 @@ export default function GuestOrder() {
           ✅ Order sent to the kitchen! Add more below, or view your tab. Pay at the counter when you're done.
         </div>
       )}
+
+      <div className="row mb" style={{ gap: '0.5rem' }}>
+        <button className="grow" disabled={!!called} onClick={() => callWaiter('service')}>
+          {called === 'service' ? '✅ Staff on the way' : '🔔 Call waiter'}
+        </button>
+        <button className="grow" disabled={!!called} onClick={() => callWaiter('bill')}>
+          {called === 'bill' ? '✅ Bill on the way' : '🧾 Ask for the bill'}
+        </button>
+      </div>
 
       <div className="cat-tabs">
         {categories.map((c) => (

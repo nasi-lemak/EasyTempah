@@ -26,7 +26,11 @@ tablesRouter.get('/', (_req, res) => {
         (SELECT COUNT(*) FROM order_items oi JOIN orders o2 ON o2.id = oi.order_id
           WHERE o2.table_id = t.id AND o2.status = 'open' AND oi.status IN ('sent','preparing')) AS cooking_lines,
         (SELECT COUNT(*) FROM order_items oi JOIN orders o2 ON o2.id = oi.order_id
-          WHERE o2.table_id = t.id AND o2.status = 'open' AND oi.status = 'ready') AS ready_lines
+          WHERE o2.table_id = t.id AND o2.status = 'open' AND oi.status = 'ready') AS ready_lines,
+        (SELECT sc.reason FROM service_calls sc WHERE sc.table_id = t.id AND sc.acked_at IS NULL
+          ORDER BY sc.id DESC LIMIT 1) AS call_reason,
+        (SELECT sc.created_at FROM service_calls sc WHERE sc.table_id = t.id AND sc.acked_at IS NULL
+          ORDER BY sc.id DESC LIMIT 1) AS call_at
        FROM dining_tables t
        WHERE t.active = 1
        ORDER BY t.zone, t.name`,
@@ -67,6 +71,16 @@ tablesRouter.post('/', requireRole('manager'), (req, res) => {
     .run(name.trim(), zone?.trim() || 'Main', seats ?? 2, newQrToken());
   publish('tables');
   res.status(201).json({ id: Number(info.lastInsertRowid) });
+});
+
+/** Acknowledge a guest's call-waiter request (any signed-in staff). */
+tablesRouter.post('/:id/ack-call', (req, res) => {
+  const authed = req as import('../middleware/auth').AuthedRequest;
+  db.prepare(
+    "UPDATE service_calls SET acked_at = datetime('now'), acked_by = ? WHERE table_id = ? AND acked_at IS NULL",
+  ).run(authed.user!.id, req.params.id);
+  publish('tables');
+  res.json({ ok: true });
 });
 
 /** Rotate a table's QR ordering token, invalidating any printed codes. */

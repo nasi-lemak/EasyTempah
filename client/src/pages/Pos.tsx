@@ -33,6 +33,7 @@ export default function Pos() {
   const [comboItem, setComboItem] = useState<Item | null>(null);
   const [showPay, setShowPay] = useState(false);
   const [showDiscount, setShowDiscount] = useState(false);
+  const [showOpenItem, setShowOpenItem] = useState(false);
   const [showSplit, setShowSplit] = useState(false);
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
   const [showDelivery, setShowDelivery] = useState(false);
@@ -225,6 +226,9 @@ export default function Pos() {
               {c.name}
             </button>
           ))}
+          <button title="Ring up something that isn't on the menu" disabled={!isOpen} onClick={() => setShowOpenItem(true)}>
+            ✎ Open item
+          </button>
         </div>
         <div className="item-grid">
           {items.map((item) => {
@@ -405,6 +409,20 @@ export default function Pos() {
           onClose={() => setShowSplit(false)}
         />
       )}
+      {showOpenItem && (
+        <OpenItemDialog
+          onAdd={async (custom, qty) => {
+            await run(async () => {
+              const r = await api.post<{ order: Order }>(`/api/orders/${order.id}/items`, {
+                lines: [{ qty, custom }],
+              });
+              setOrder(r.order);
+            });
+            setShowOpenItem(false);
+          }}
+          onClose={() => setShowOpenItem(false)}
+        />
+      )}
       {showDiscount && (
         <DiscountDialog
           order={order}
@@ -554,6 +572,45 @@ function DeliveryDialog({
       )}
       <button className="primary" onClick={() => onStart(platform, ref.trim() || undefined)}>
         Start order
+      </button>
+    </Modal>
+  );
+}
+
+/** Ring up something off-menu: "special of the day, RM 8". Audited server-side. */
+function OpenItemDialog({
+  onAdd,
+  onClose,
+}: {
+  onAdd: (custom: { name: string; price_cents: number; station: 'kitchen' | 'bar' }, qty: number) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [price, setPrice] = useState('');
+  const [station, setStation] = useState<'kitchen' | 'bar'>('kitchen');
+  const [qty, setQty] = useState(1);
+  const cents = Math.round(parseFloat(price || '0') * 100);
+  return (
+    <Modal title="Open item" onClose={onClose}>
+      <label>Name (as it should print)</label>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Special of the day" style={{ width: '100%' }} className="mb" autoFocus />
+      <label>Price (RM)</label>
+      <input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} style={{ width: '100%' }} className="mb" />
+      <label>Prepared by</label>
+      <div className="row mb">
+        <button className={station === 'kitchen' ? 'primary' : ''} onClick={() => setStation('kitchen')}>Kitchen</button>
+        <button className={station === 'bar' ? 'primary' : ''} onClick={() => setStation('bar')}>Bar</button>
+        <div className="grow" />
+        <button className="qty-btn" onClick={() => setQty((q) => Math.max(1, q - 1))}>−</button>
+        <strong>{qty}</strong>
+        <button className="qty-btn" onClick={() => setQty((q) => q + 1)}>+</button>
+      </div>
+      <button
+        className="primary"
+        disabled={!name.trim() || !Number.isFinite(cents) || cents < 0}
+        onClick={() => onAdd({ name: name.trim(), price_cents: cents, station }, qty)}
+      >
+        Add to bill
       </button>
     </Modal>
   );

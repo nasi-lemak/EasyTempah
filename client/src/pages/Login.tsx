@@ -9,6 +9,7 @@ export default function Login() {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [clockMsg, setClockMsg] = useState('');
   const setAuth = useStore((s) => s.setAuth);
   const navigate = useNavigate();
 
@@ -34,6 +35,28 @@ export default function Login() {
     setPin(next);
   };
 
+  /** Time clock: the PIN identifies you and toggles in/out — no sign-in needed. */
+  const clock = async () => {
+    if (pin.length < 4 || busy) return;
+    setBusy(true);
+    setError('');
+    setClockMsg('');
+    try {
+      const r = await api.post<{ name: string; action: 'in' | 'out'; since?: string }>('/api/auth/clock', { pin });
+      setClockMsg(
+        r.action === 'in'
+          ? `✅ ${r.name} clocked IN at ${new Date().toLocaleTimeString()}`
+          : `👋 ${r.name} clocked OUT`,
+      );
+      setPin('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Clock failed');
+      setPin('');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="login-wrap">
       <div className="brand">EasyTempah</div>
@@ -52,6 +75,10 @@ export default function Login() {
         onEnter={() => submit(pin)}
         enterLabel="Go"
       />
+      <button className="ghost" onClick={clock} disabled={pin.length < 4 || busy} title="Enter your PIN, then tap to clock in or out for the day">
+        ⏱ Clock in / out
+      </button>
+      {clockMsg && <div style={{ color: 'var(--accent)', fontWeight: 700 }}>{clockMsg}</div>}
       {error && <div className="error-text">{error}</div>}
     </div>
   );

@@ -45,7 +45,14 @@ ordersRouter.get('/', (req, res) => {
     where.push('o.status = ?');
     params.push(status);
   }
-  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  // Search overrides the date filter: "the customer is back with a receipt"
+  // shouldn't require knowing which day it was.
+  const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 40) : '';
+  if (q) {
+    const like = `%${q}%`;
+    where.push('(o.order_no LIKE ? OR o.receipt_no LIKE ? OR o.platform_ref LIKE ?)');
+    params.push(like, like, like);
+  } else if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
     where.push("date(o.opened_at, 'localtime') = ?");
     params.push(date);
   }
