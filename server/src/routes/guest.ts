@@ -30,7 +30,8 @@ guestRouter.get('/:token/menu', (req, res) => {
     .all() as Category[];
   const items = db
     .prepare(
-      `SELECT id, category_id, name, price_cents, station, track_stock, stock_qty, low_stock_threshold, sort, is_combo
+      `SELECT id, category_id, name, price_cents, station, track_stock, stock_qty, low_stock_threshold, sort, is_combo,
+        (SELECT strftime('%s', updated_at) FROM item_images WHERE item_id = items.id) AS image_v
        FROM items WHERE active = 1 ORDER BY sort, name`,
     )
     .all() as Item[];
@@ -45,7 +46,7 @@ guestRouter.get('/:token/menu', (req, res) => {
   const tax = getTaxSettings();
   res.json({
     table: { name: table.name, zone: table.zone },
-    business: { name: business.name, currencySymbol: business.currencySymbol },
+    business: { name: business.name, currencySymbol: business.currencySymbol, accentColor: business.accentColor },
     tax: { taxLabel: tax.taxLabel, serviceLabel: tax.serviceLabel },
     menu: { categories, items, groups, modifiers, links, comboGroups, comboItems },
   });

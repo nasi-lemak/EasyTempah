@@ -5,7 +5,34 @@ import { badRequest, notFound } from '../middleware/errors';
 import { publish } from '../realtime/bus';
 import type { Category, Item, Modifier, ModifierGroup } from '../types';
 
+/** image_v (upload timestamp) lets clients build cache-busted photo URLs. */
+export const ITEMS_WITH_IMAGE = `SELECT items.*,
+  (SELECT strftime('%s', updated_at) FROM item_images WHERE item_id = items.id) AS image_v
+  FROM items`;
+
+const MAX_IMAGE_BYTES = 400 * 1024;
+const IMAGE_MIMES: Record<string, string> = { webp: 'image/webp', jpeg: 'image/jpeg', png: 'image/png' };
+
 export const menuRouter = Router();
+
+/**
+ * Public, cache-friendly photo endpoint (mounted before auth): menu photos
+ * are shown to guests on the QR menu, so they are not secrets. ?v= busts
+ * caches after a re-upload.
+ */
+menuRouter.get('/images/:itemId', (req, res, next) => {
+  const row = db
+    .prepare('SELECT mime, data FROM item_images WHERE item_id = ?')
+    .get(Number(req.params.itemId)) as { mime: string; data: Buffer } | undefined;
+  if (!row) {
+    next(notFound('No photo'));
+    return;
+  }
+  res.setHeader('Content-Type', row.mime);
+  res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+  res.send(row.data);
+});
+
 menuRouter.use(requireAuth);
 
 /** Full menu tree for the POS screen: categories → items → modifier groups → modifiers. */
@@ -14,7 +41,7 @@ menuRouter.get('/', (_req, res) => {
     .prepare('SELECT * FROM categories WHERE active = 1 ORDER BY sort, name')
     .all() as Category[];
   const items = db
-    .prepare('SELECT * FROM items WHERE active = 1 ORDER BY sort, name')
+    .prepare(`${ITEMS_WITH_IMAGE} WHERE active = 1 ORDER BY sort, name`)
     .all() as Item[];
   const groups = db.prepare('SELECT * FROM modifier_groups').all() as ModifierGroup[];
   const modifiers = db
@@ -34,7 +61,7 @@ menuRouter.get('/', (_req, res) => {
 menuRouter.get('/admin', requireRole('manager'), (_req, res) => {
   res.json({
     categories: db.prepare('SELECT * FROM categories ORDER BY sort, name').all(),
-    items: db.prepare('SELECT * FROM items ORDER BY sort, name').all(),
+    items: db.prepare(`${ITEMS_WITH_IMAGE} ORDER BY sort, name`).all(),
     groups: db.prepare('SELECT * FROM modifier_groups ORDER BY name').all(),
     modifiers: db.prepare('SELECT * FROM modifiers ORDER BY sort, name').all(),
     links: db.prepare('SELECT * FROM item_modifier_groups').all(),
@@ -44,6 +71,35 @@ menuRouter.get('/admin', requireRole('manager'), (_req, res) => {
     recipeLines: db.prepare('SELECT * FROM recipe_lines').all(),
     modifierRecipeLines: db.prepare('SELECT * FROM modifier_recipe_lines').all(),
   });
+});
+
+/**
+ * Item photo upload: a data URL, resized square client-side before upload
+ * (WebP where the browser encodes it, JPEG fallback) so originals never
+ * cross the wire.
+ */
+menuRouter.put('/items/:id/image', requireRole('manager'), (req: AuthedRequest, res) => {
+  const item = db.prepare('SELECT id FROM items WHERE id = ?').get(req.params.id);
+  if (!item) throw notFound('Item not found');
+  const { dataUrl } = req.body as { dataUrl?: string };
+  const m = typeof dataUrl === 'string' && /^data:image\/(webp|jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  if (!m) throw badRequest('dataUrl must be a webp, jpeg or png data URL');
+  const data = Buffer.from(m[2], 'base64');
+  if (data.length === 0 || data.length > MAX_IMAGE_BYTES) {
+    throw badRequest(`Photo must be under ${MAX_IMAGE_BYTES / 1024} KB — the app resizes before upload, so this usually means a raw file was sent`);
+  }
+  db.prepare(
+    `INSERT INTO item_images (item_id, mime, data, updated_at) VALUES (?, ?, ?, datetime('now'))
+     ON CONFLICT(item_id) DO UPDATE SET mime = excluded.mime, data = excluded.data, updated_at = excluded.updated_at`,
+  ).run(req.params.id, IMAGE_MIMES[m[1]], data);
+  publish('menu');
+  res.json({ ok: true, bytes: data.length });
+});
+
+menuRouter.delete('/items/:id/image', requireRole('manager'), (req, res) => {
+  db.prepare('DELETE FROM item_images WHERE item_id = ?').run(req.params.id);
+  publish('menu');
+  res.json({ ok: true });
 });
 
 /** Replace an item's ingredient recipe wholesale. */

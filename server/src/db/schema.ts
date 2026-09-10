@@ -435,6 +435,16 @@ const MIGRATIONS: string[] = [
   ALTER TABLE orders ADD COLUMN receipt_no TEXT;
   CREATE UNIQUE INDEX idx_orders_receipt_no ON orders(receipt_no) WHERE receipt_no IS NOT NULL;
   `,
+  // v14 — menu item photos. A separate table so item queries (SELECT *) never
+  // drag image blobs into JSON payloads; served via a public cached endpoint.
+  `
+  CREATE TABLE item_images (
+    item_id INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+    mime TEXT NOT NULL,
+    data BLOB NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  `,
 ];
 
 export function applySchema(db: Database): void {

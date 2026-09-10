@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import ComboDialog, { type ComboChoice } from '../components/ComboDialog';
 import Modal from '../components/Modal';
 import ModifierDialog, { type ModifierChoice } from '../components/ModifierDialog';
+import { itemImageUrl } from '../images';
 import { formatMoney } from '../store';
 import { applyAccent } from '../theme';
 import type { Item, MenuData, ModifierSnapshot } from '../types';
@@ -227,6 +228,9 @@ export default function GuestOrder() {
           const oos = item.track_stock === 1 && item.stock_qty <= 0;
           return (
             <button key={item.id} className="guest-item" onClick={() => tapItem(item)} disabled={oos}>
+              {itemImageUrl(item.id, item.image_v) && (
+                <img className="thumb" src={itemImageUrl(item.id, item.image_v)!} alt="" loading="lazy" />
+              )}
               <span className="grow" style={{ textAlign: 'left' }}>
                 <div style={{ fontWeight: 700 }}>{item.name}</div>
                 {oos && <div className="small" style={{ color: 'var(--danger)' }}>Sold out</div>}

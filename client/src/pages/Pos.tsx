@@ -6,6 +6,7 @@ import Modal from '../components/Modal';
 import ModifierDialog, { type ModifierChoice } from '../components/ModifierDialog';
 import PayDialog from '../components/PayDialog';
 import Receipt from '../components/Receipt';
+import { itemImageUrl } from '../images';
 import { hasRole, useMoney, useStore } from '../store';
 import type { Item, MenuData, ModifierSnapshot, Order } from '../types';
 import { useEvents } from '../useEvents';
@@ -230,6 +231,9 @@ export default function Pos() {
             const oos = item.track_stock === 1 && item.stock_qty <= 0;
             return (
               <button key={item.id} className="item-card" onClick={() => tapItem(item)} disabled={!isOpen || oos}>
+                {itemImageUrl(item.id, item.image_v) && (
+                  <img className="thumb" src={itemImageUrl(item.id, item.image_v)!} alt="" loading="lazy" />
+                )}
                 <span className="name">{item.name}</span>
                 <span className="row" style={{ justifyContent: 'space-between' }}>
                   <span className="price">{money(item.price_cents)}</span>

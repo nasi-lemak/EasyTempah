@@ -385,3 +385,21 @@ The whole UI draws from one token block in `styles.css`; all tinted washes use
   overrides — the hover shade is derived and button text is picked by
   relative luminance, so any brand color stays readable in both themes.
   Guest QR pages apply it too, from the public menu payload.
+
+## Menu item photos
+
+Photos live in their own `item_images` table (`item_id PK, mime, data BLOB`)
+so `SELECT *` item queries never drag blobs into JSON payloads; item lists
+expose only `image_v` (the upload timestamp) for cache-busted URLs. Uploads
+are prepared client-side (`client/src/images.ts`): center-crop to a 512px
+square and encode WebP where the browser can (all Chromium terminals), JPEG
+otherwise — originals never cross the wire, and the server enforces a 400 KB
+cap plus a strict data-URL mime whitelist. Serving is a public, cacheable
+endpoint (`GET /api/menu/images/:itemId`, mounted before auth — menu photos
+are shown to unauthenticated QR guests by design) with `max-age=86400` and a
+`?v=` version from `image_v`. Thumbnails render on POS tiles and guest menu
+rows; items without photos keep the text-only layout. AVIF was considered
+and deliberately deferred: browsers cannot reliably *encode* AVIF in canvas,
+and server-side encoding would add a native codec dependency for ~10 KB per
+image on a ~1 MB total menu — the schema stores any mime, so it can be
+revisited without migration.

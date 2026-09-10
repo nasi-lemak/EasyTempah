@@ -31,6 +31,7 @@ export interface Item {
   low_stock_threshold: number;
   sort: number;
   is_combo: number;
+  image_v?: string | null; // photo upload timestamp; null/absent = no photo
 }
 
 export interface Ingredient {

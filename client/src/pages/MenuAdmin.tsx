@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import Modal from '../components/Modal';
+import { itemImageUrl, prepareItemPhoto } from '../images';
 import { useMoney } from '../store';
 import type {
   Category,
@@ -110,6 +111,8 @@ export default function MenuAdmin() {
   const [menu, setMenu] = useState<AdminMenu | null>(null);
   const [tab, setTab] = useState<'items' | 'categories' | 'modifiers' | 'promos'>('items');
   const [itemForm, setItemForm] = useState<typeof emptyItemForm | null>(null);
+  // Photo staged in the editor: a new data URL, 'remove', or null = unchanged.
+  const [photo, setPhoto] = useState<string | 'remove' | null>(null);
   const [comboForm, setComboForm] = useState<ComboGroupForm[]>([]);
   const [recipeForm, setRecipeForm] = useState<RecipeForm[]>([]);
   const [modRecipe, setModRecipe] = useState<{ modifier: Modifier; lines: RecipeForm[] } | null>(null);
@@ -157,10 +160,14 @@ export default function MenuAdmin() {
       await api.put(`/api/menu/items/${itemId}/recipe`, {
         lines: recipeForm.filter((l) => l.qty > 0),
       });
+      if (photo === 'remove') await api.delete(`/api/menu/items/${itemId}/image`);
+      else if (photo) await api.put(`/api/menu/items/${itemId}/image`, { dataUrl: photo });
+      setPhoto(null);
       setItemForm(null);
     });
 
   const editItem = (item: Item) => {
+    setPhoto(null);
     setItemForm({
       id: item.id,
       name: item.name,
@@ -207,6 +214,7 @@ export default function MenuAdmin() {
               setItemForm({ ...emptyItemForm, category_id: menu.categories[0]?.id ?? 0 });
               setComboForm([]);
               setRecipeForm([]);
+              setPhoto(null);
             }}
           >
             + New item
@@ -356,6 +364,37 @@ export default function MenuAdmin() {
           </select>
           <label>Price (RM)</label>
           <input inputMode="decimal" value={itemForm.price} onChange={(e) => setItemForm({ ...itemForm, price: e.target.value })} style={{ width: '100%' }} className="mb" />
+          <label>Photo (shown on the guest QR menu and POS tile)</label>
+          <div className="row wrap mb" style={{ alignItems: 'center' }}>
+            {(() => {
+              const current =
+                photo && photo !== 'remove'
+                  ? photo
+                  : photo !== 'remove' && itemForm.id
+                    ? itemImageUrl(itemForm.id, menu.items.find((i) => i.id === itemForm.id)?.image_v)
+                    : null;
+              return current ? (
+                <img src={current} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8 }} />
+              ) : (
+                <span className="muted small">No photo</span>
+              );
+            })()}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (!file) return;
+                try {
+                  setPhoto(await prepareItemPhoto(file));
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Could not read image');
+                }
+              }}
+            />
+            <button className="ghost" onClick={() => setPhoto('remove')}>Remove</button>
+          </div>
           <label>Station</label>
           <div className="row mb">
             <button className={itemForm.station === 'kitchen' ? 'primary' : ''} onClick={() => setItemForm({ ...itemForm, station: 'kitchen' })}>Kitchen</button>
