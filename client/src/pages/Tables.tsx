@@ -140,7 +140,10 @@ export default function Tables() {
           }}
         >
           <span className="grow">
-            🔔 <strong>Table {t.name}</strong> is calling — {t.call_reason === 'bill' ? 'wants the bill' : 'needs service'}
+            🔔 <strong>Table {t.name}</strong>{' '}
+            {t.call_reason === 'limit'
+              ? 'hit the ordering limit — check on them (big party, or a misused QR code)'
+              : `is calling — ${t.call_reason === 'bill' ? 'wants the bill' : 'needs service'}`}
             <span className="muted small"> · {age(t.call_at)}</span>
           </span>
           <button

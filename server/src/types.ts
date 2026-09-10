@@ -183,6 +183,12 @@ export interface LoyaltySettings {
   privacyNotice: string;
 }
 
+export interface GuestSettings {
+  /** Flood guard on QR ordering: per-table submission burst inside a 2-minute window. */
+  orderGuardEnabled: boolean;
+  orderBurst: number;
+}
+
 export interface OrderItemModifierSnapshot {
   modifier_id: number;
   group_name: string;

@@ -14,6 +14,7 @@ import {
   getEinvoiceSettings,
   getGatewaySettings,
   getLogoDataUrl,
+  getGuestSettings,
   getLoyaltySettings,
   getPaymentsSettings,
   getPlatformsSettings,
@@ -27,6 +28,7 @@ import type {
   BusinessSettings,
   EinvoiceSettings,
   GatewaySettings,
+  GuestSettings,
   LoyaltySettings,
   PaymentsSettings,
   PlatformsSettings,
@@ -57,6 +59,7 @@ function fullPayload() {
     gateway: maskedGateway(),
     platforms: getPlatformsSettings(),
     loyalty: getLoyaltySettings(),
+    guest: getGuestSettings(),
     // Labels computed server-side so screen and thermal receipts always agree.
     receipts: { ...receipts, labels: makeLabels(receipts.langPrimary, receipts.langSecondary) },
     logo: getLogoDataUrl(),
@@ -73,7 +76,7 @@ settingsRouter.get('/', (_req, res) => {
 });
 
 settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
-  const { business, tax, printers, payments, einvoice, gateway, platforms, loyalty, receipts } = req.body as {
+  const { business, tax, printers, payments, einvoice, gateway, platforms, loyalty, receipts, guest } = req.body as {
     business?: Partial<BusinessSettings>;
     tax?: Partial<TaxSettings>;
     printers?: Partial<PrintersSettings>;
@@ -83,6 +86,7 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
     platforms?: Partial<PlatformsSettings>;
     loyalty?: Partial<LoyaltySettings>;
     receipts?: Partial<ReceiptsSettings>;
+    guest?: Partial<GuestSettings>;
   };
   if (business) {
     const merged = { ...DEFAULT_BUSINESS, ...getBusinessSettings(), ...business };
@@ -198,6 +202,14 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
       throw badRequest('Privacy notice must be text up to 2000 characters');
     }
     setSetting('loyalty', merged);
+  }
+  if (guest) {
+    const merged: GuestSettings = { ...getGuestSettings(), ...guest };
+    if (!Number.isInteger(merged.orderBurst) || merged.orderBurst < 2 || merged.orderBurst > 50) {
+      throw badRequest('Guest order burst must be a whole number from 2 to 50');
+    }
+    merged.orderGuardEnabled = !!merged.orderGuardEnabled;
+    setSetting('guest', merged);
   }
   if (receipts) {
     const merged: ReceiptsSettings = { ...DEFAULT_RECEIPTS, ...getReceiptsSettings(), ...receipts };

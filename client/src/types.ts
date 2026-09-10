@@ -113,7 +113,7 @@ export interface DiningTable {
   order_opened_at: string | null;
   cooking_lines: number | null;
   ready_lines: number | null;
-  call_reason: 'service' | 'bill' | null; // unacknowledged guest call-waiter request
+  call_reason: 'service' | 'bill' | 'limit' | null; // unacknowledged guest call, or the order guard paging staff
   call_at: string | null;
   reservation_name: string | null; // upcoming booking on this table (±30min/+2h window)
   reservation_at: string | null;
@@ -272,6 +272,11 @@ export interface LoyaltySettings {
   minRedeemPoints: number;
   retentionMonths: number;
   privacyNotice: string;
+}
+
+export interface GuestSettings {
+  orderGuardEnabled: boolean;
+  orderBurst: number;
 }
 
 /** Scheduled automatic discount (happy hour etc.), managed under Menu → Promos. */

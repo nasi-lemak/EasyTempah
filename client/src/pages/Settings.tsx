@@ -6,6 +6,7 @@ import type {
   BusinessSettings,
   EinvoiceSettings,
   GatewaySettings,
+  GuestSettings,
   LoyaltySettings,
   PaymentsSettings,
   PlatformsSettings,
@@ -23,6 +24,7 @@ type SettingsPayload = {
   gateway: GatewaySettings;
   platforms: PlatformsSettings;
   loyalty: LoyaltySettings;
+  guest: GuestSettings;
   receipts: ReceiptsSettings;
   logo: string;
 };
@@ -41,6 +43,7 @@ export default function SettingsPage() {
   const [gatewaySecret, setGatewaySecret] = useState('');
   const [platforms, setPlatforms] = useState<PlatformsSettings | null>(null);
   const [loyalty, setLoyalty] = useState<LoyaltySettings | null>(null);
+  const [guest, setGuest] = useState<GuestSettings | null>(null);
   const [receipts, setReceipts] = useState<ReceiptsSettings | null>(null);
   const [logo, setLogo] = useState('');
   const [saved, setSaved] = useState(false);
@@ -71,13 +74,14 @@ export default function SettingsPage() {
         setGateway(r.gateway);
         setPlatforms(r.platforms);
         setLoyalty(r.loyalty);
+        setGuest(r.guest);
         setReceipts(r.receipts);
         setLogo(r.logo ?? '');
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, []);
 
-  if (!business || !tax || !printers || !payments || !einvoice || !gateway || !platforms || !loyalty || !receipts) {
+  if (!business || !tax || !printers || !payments || !einvoice || !gateway || !platforms || !loyalty || !guest || !receipts) {
     return <div className="muted">Loading…</div>;
   }
 
@@ -94,6 +98,7 @@ export default function SettingsPage() {
         gateway: { ...gateway, ...(gatewaySecret.trim() ? { webhookSecret: gatewaySecret.trim() } : {}) },
         platforms,
         loyalty,
+        guest,
         receipts,
       });
       setBusiness(r.business);
@@ -104,6 +109,7 @@ export default function SettingsPage() {
       setGateway(r.gateway);
       setPlatforms(r.platforms);
       setLoyalty(r.loyalty);
+      setGuest(r.guest);
       setReceipts(r.receipts);
       setLogo(r.logo ?? '');
       setEinvoiceSecret('');
@@ -459,6 +465,37 @@ export default function SettingsPage() {
           PDPA: consent is recorded when a member joins; managers can show, correct or erase a
           member's data from the Members page. The retention setting anonymises members with no
           visits in the chosen window, once a day.
+        </div>
+      </div>
+
+      <div className="panel mb">
+        <h2>Guest QR ordering</h2>
+        <div className="row wrap mb">
+          <button
+            className={guest.orderGuardEnabled ? 'primary' : ''}
+            onClick={() => setGuest({ ...guest, orderGuardEnabled: !guest.orderGuardEnabled })}
+          >
+            Order guard {guest.orderGuardEnabled ? 'ON' : 'off'}
+          </button>
+          <div className="grow" style={{ minWidth: 220 }}>
+            <label>Max orders per table in 2 minutes</label>
+            <input
+              type="number"
+              min={2}
+              max={50}
+              value={guest.orderBurst}
+              onChange={(e) => setGuest({ ...guest, orderBurst: Math.floor(Number(e.target.value) || 0) })}
+              disabled={!guest.orderGuardEnabled}
+              style={{ width: '100%' }}
+            />
+          </div>
+        </div>
+        <div className="muted small">
+          Stops a photographed QR code from flooding the kitchen. Set it comfortably above your
+          biggest table — every phone at the table sending at once counts. When a table hits the
+          limit, the guests see "staff is on the way" and the 🔔 bell rings on the Tables screen
+          automatically; nobody's cart is ever lost. Turn it off only if your network is fully
+          trusted.
         </div>
       </div>
 

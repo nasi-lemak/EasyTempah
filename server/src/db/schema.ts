@@ -489,6 +489,23 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE customers ADD COLUMN consent_at TEXT;
   `,
+  // v18 — 'limit' call reason: the guest order guard pages staff when a table
+  // hits the submission limit. SQLite can't alter a CHECK, so rebuild.
+  `
+  CREATE TABLE service_calls_v18 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    table_id INTEGER NOT NULL REFERENCES dining_tables(id),
+    reason TEXT NOT NULL DEFAULT 'service' CHECK (reason IN ('service','bill','limit')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    acked_at TEXT,
+    acked_by INTEGER REFERENCES users(id)
+  );
+  INSERT INTO service_calls_v18 (id, table_id, reason, created_at, acked_at, acked_by)
+    SELECT id, table_id, reason, created_at, acked_at, acked_by FROM service_calls;
+  DROP TABLE service_calls;
+  ALTER TABLE service_calls_v18 RENAME TO service_calls;
+  CREATE INDEX idx_service_calls_open ON service_calls(table_id) WHERE acked_at IS NULL;
+  `,
 ];
 
 export function applySchema(db: Database): void {

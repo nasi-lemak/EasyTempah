@@ -4,7 +4,7 @@ import { badRequest, notFound } from '../middleware/errors';
 import { publish } from '../realtime/bus';
 import { guestSubmitOrder, guestTableState, type AddLineInput } from '../services/orders';
 import { printKitchenTickets } from '../services/printer';
-import { getBusinessSettings, getTaxSettings } from '../services/settings';
+import { getBusinessSettings, getGuestSettings, getTaxSettings } from '../services/settings';
 import type { Category, Item, Modifier, ModifierGroup } from '../types';
 
 /**
@@ -109,23 +109,36 @@ guestRouter.post('/:token/call', (req, res) => {
 
 // Per-table flood guard on guest submissions. A whole table often scans and
 // sends at the same moment, so this is a burst allowance, not a cooldown:
-// up to 8 submissions in any 2-minute window sail through (covers everyone
-// at a big table ordering at once, plus a second round), while someone
-// hammering a photographed QR code is stopped and has to wait the window
-// out. In-memory is fine — a restart resetting the window is harmless.
+// up to the configured number of submissions (Settings → Guest QR ordering)
+// in any 2-minute window sail through, while someone hammering a
+// photographed QR code is stopped and has to wait the window out. Hitting
+// the limit also rings the staff bell for that table, so a genuinely big
+// party gets a person walking over instead of a dead end. In-memory is
+// fine — a restart resetting the window is harmless.
 const ORDER_WINDOW_MS = 2 * 60_000;
-const ORDER_BURST = 8;
 const orderTimes = new Map<number, number[]>();
+
+/** One un-acknowledged 'limit' call per table — blocked retries never stack bells. */
+function ringStaffForLimit(tableId: number): void {
+  const open = db
+    .prepare('SELECT 1 FROM service_calls WHERE table_id = ? AND acked_at IS NULL')
+    .get(tableId);
+  if (open) return;
+  db.prepare("INSERT INTO service_calls (table_id, reason) VALUES (?, 'limit')").run(tableId);
+  publish('tables');
+}
 
 guestRouter.post('/:token/order', (req, res) => {
   const token = requireToken(req.params.token);
   const lines = (req.body as { lines?: AddLineInput[] }).lines;
   if (!Array.isArray(lines)) throw badRequest('lines[] required');
   const { table } = guestTableState(token);
+  const { orderGuardEnabled, orderBurst } = getGuestSettings();
   const now = Date.now();
   const recent = (orderTimes.get(table.id) ?? []).filter((t) => now - t < ORDER_WINDOW_MS);
-  if (recent.length >= ORDER_BURST) {
-    res.status(429).json({ error: 'Lots of orders just went in for this table — please wait a minute, or ask a member of staff' });
+  if (orderGuardEnabled && recent.length >= orderBurst) {
+    ringStaffForLimit(table.id);
+    res.status(429).json({ error: 'Lots of orders just went in for this table — a member of staff is on the way, or try again in a minute' });
     return;
   }
   const { orderId, lineIds } = guestSubmitOrder(token, lines);

@@ -3,6 +3,7 @@ import type {
   BusinessSettings,
   EinvoiceSettings,
   GatewaySettings,
+  GuestSettings,
   LoyaltySettings,
   PaymentsSettings,
   PlatformsSettings,
@@ -160,6 +161,15 @@ export const DEFAULT_LOYALTY: LoyaltySettings = {
 export function getLoyaltySettings(): LoyaltySettings {
   // Spread over the default so settings saved before newer fields existed stay valid.
   return { ...DEFAULT_LOYALTY, ...getSetting('loyalty', DEFAULT_LOYALTY) };
+}
+
+export const DEFAULT_GUEST: GuestSettings = {
+  orderGuardEnabled: true,
+  orderBurst: 12, // covers a 12-top all sending at once inside the 2-minute window
+};
+
+export function getGuestSettings(): GuestSettings {
+  return { ...DEFAULT_GUEST, ...getSetting('guest', DEFAULT_GUEST) };
 }
 
 export const DEFAULT_GATEWAY: GatewaySettings = {
