@@ -107,24 +107,30 @@ guestRouter.post('/:token/call', (req, res) => {
   res.status(201).json({ ok: true });
 });
 
-// Per-table cooldown between guest submissions: a photographed QR code must
-// not let anyone flood the kitchen with tickets. In-memory is fine — a restart
-// resetting the window is harmless.
-const ORDER_COOLDOWN_MS = 10_000;
-const lastOrderAt = new Map<number, number>();
+// Per-table flood guard on guest submissions. A whole table often scans and
+// sends at the same moment, so this is a burst allowance, not a cooldown:
+// up to 8 submissions in any 2-minute window sail through (covers everyone
+// at a big table ordering at once, plus a second round), while someone
+// hammering a photographed QR code is stopped and has to wait the window
+// out. In-memory is fine — a restart resetting the window is harmless.
+const ORDER_WINDOW_MS = 2 * 60_000;
+const ORDER_BURST = 8;
+const orderTimes = new Map<number, number[]>();
 
 guestRouter.post('/:token/order', (req, res) => {
   const token = requireToken(req.params.token);
   const lines = (req.body as { lines?: AddLineInput[] }).lines;
   if (!Array.isArray(lines)) throw badRequest('lines[] required');
   const { table } = guestTableState(token);
-  const last = lastOrderAt.get(table.id) ?? 0;
-  if (Date.now() - last < ORDER_COOLDOWN_MS) {
-    res.status(429).json({ error: 'Order just sent — give the kitchen a few seconds before adding more' });
+  const now = Date.now();
+  const recent = (orderTimes.get(table.id) ?? []).filter((t) => now - t < ORDER_WINDOW_MS);
+  if (recent.length >= ORDER_BURST) {
+    res.status(429).json({ error: 'Lots of orders just went in for this table — please wait a minute, or ask a member of staff' });
     return;
   }
   const { orderId, lineIds } = guestSubmitOrder(token, lines);
-  lastOrderAt.set(table.id, Date.now());
+  recent.push(now);
+  orderTimes.set(table.id, recent);
   publish('kds');
   publish('orders');
   publish('tables');
