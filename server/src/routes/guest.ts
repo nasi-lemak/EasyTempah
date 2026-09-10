@@ -107,11 +107,24 @@ guestRouter.post('/:token/call', (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+// Per-table cooldown between guest submissions: a photographed QR code must
+// not let anyone flood the kitchen with tickets. In-memory is fine — a restart
+// resetting the window is harmless.
+const ORDER_COOLDOWN_MS = 10_000;
+const lastOrderAt = new Map<number, number>();
+
 guestRouter.post('/:token/order', (req, res) => {
   const token = requireToken(req.params.token);
   const lines = (req.body as { lines?: AddLineInput[] }).lines;
   if (!Array.isArray(lines)) throw badRequest('lines[] required');
+  const { table } = guestTableState(token);
+  const last = lastOrderAt.get(table.id) ?? 0;
+  if (Date.now() - last < ORDER_COOLDOWN_MS) {
+    res.status(429).json({ error: 'Order just sent — give the kitchen a few seconds before adding more' });
+    return;
+  }
   const { orderId, lineIds } = guestSubmitOrder(token, lines);
+  lastOrderAt.set(table.id, Date.now());
   publish('kds');
   publish('orders');
   publish('tables');

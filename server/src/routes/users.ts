@@ -48,7 +48,9 @@ usersRouter.patch('/:id', (req: AuthedRequest, res) => {
     active !== undefined ? (active ? 1 : 0) : user.active,
     user.id,
   );
-  if (active === false) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
+  // A changed PIN (the fix when one leaks) or deactivation ends every live
+  // session for that user immediately — the new PIN is the only way back in.
+  if (pin || active === false) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
   audit(req.user!.id, 'user.update', { userId: user.id });
   res.json({ ok: true });
 });

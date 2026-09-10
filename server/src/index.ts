@@ -1,7 +1,7 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
-import './db/connection'; // opens DB + applies migrations
+import { db } from './db/connection'; // opens DB + applies migrations
 import { scheduleBackups } from './services/backup';
 import { purgeInactiveMembers } from './services/customers';
 import { requireAuth } from './middleware/auth';
@@ -26,6 +26,16 @@ import { tablesRouter } from './routes/tables';
 import { usersRouter } from './routes/users';
 
 const app = express();
+app.disable('x-powered-by');
+// Node's flat query parser instead of qs: every query string here is flat
+// (?phone=, ?q=, ?from=&to=), and it removes the qs advisories' code path.
+app.set('query parser', 'simple');
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+});
 // Webhooks need the raw body for HMAC verification — mount before the JSON parser.
 app.use('/api/payment-webhooks', express.raw({ type: '*/*', limit: '256kb' }), webhookRouter);
 app.use(express.json({ limit: '1mb' }));
@@ -86,6 +96,18 @@ const runRetention = () => {
 };
 runRetention();
 setInterval(runRetention, 24 * 60 * 60 * 1000).unref();
+
+// Session hygiene: expired rows otherwise die only when their token is next
+// presented, so sweep them hourly.
+const sweepSessions = () => {
+  try {
+    db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now());
+  } catch (err) {
+    console.error('Session sweep failed', err);
+  }
+};
+sweepSessions();
+setInterval(sweepSessions, 60 * 60 * 1000).unref();
 
 const PORT = Number(process.env.PORT) || 4000;
 app.listen(PORT, () => {
