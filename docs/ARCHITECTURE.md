@@ -368,3 +368,20 @@ carries the bundle price); deleting a promotion referenced by paid orders is
 refused (409) — deactivate it instead, preserving reporting history. Reports
 show promotions separately from manual discounts (summary `promos_cents`,
 per-order CSV columns).
+
+## Theming
+
+The whole UI draws from one token block in `styles.css`; all tinted washes use
+`color-mix()` over those tokens, so nothing is hardcoded per theme. Two layers:
+
+- **Theme (per device)** — `theme.ts` stamps `<html data-theme="dark|light">`
+  from a localStorage preference (dark / light / follow-system, cycled from
+  the sidebar). The light palette re-tunes semantic colors for white rather
+  than inverting. Receipts, QR sheets and print views stay paper-white in
+  both themes by design.
+- **Brand accent (business-wide)** — `business.accentColor` (validated hex,
+  Settings → Business, swatches + free picker). Terminals apply it at
+  settings load as inline `--accent`/`--accent-dark`/`--accent-text`
+  overrides — the hover shade is derived and button text is picked by
+  relative luminance, so any brand color stays readable in both themes.
+  Guest QR pages apply it too, from the public menu payload.

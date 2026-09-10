@@ -381,6 +381,7 @@ export interface BusinessSettings {
   currency: string; // "MYR"
   currencySymbol: string; // "RM"
   receiptFooter: string;
+  accentColor: string; // brand color for all terminals, hex e.g. "#2dd4a7"
 }
 
 /** Receipt localization + serial numbering, chosen to fit the business's audience. */

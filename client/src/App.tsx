@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { api } from './api';
 import { hasRole, useStore, type SettingsBundle } from './store';
+import { applyAccent, applyThemePref, getThemePref, type ThemePref } from './theme';
 import Login from './pages/Login';
 import Pos from './pages/Pos';
 import Tables from './pages/Tables';
@@ -30,11 +31,21 @@ function DemoBadge() {
   );
 }
 
+const THEME_LABEL: Record<ThemePref, string> = { dark: '🌙 Dark', light: '☀️ Light', system: '🖥 Auto' };
+const THEME_NEXT: Record<ThemePref, ThemePref> = { dark: 'light', light: 'system', system: 'dark' };
+
 function Sidebar() {
   const user = useStore((s) => s.user);
   const business = useStore((s) => s.business);
   const clearAuth = useStore((s) => s.clearAuth);
   const navigate = useNavigate();
+  const [theme, setTheme] = useState<ThemePref>(getThemePref);
+
+  const cycleTheme = () => {
+    const next = THEME_NEXT[theme];
+    applyThemePref(next);
+    setTheme(next);
+  };
 
   const logout = async () => {
     try {
@@ -70,6 +81,9 @@ function Sidebar() {
         <strong>{user?.name}</strong>
         {user?.role} · {business?.name ?? 'EasyTempah'}
       </div>
+      <button onClick={cycleTheme} title="Theme for this device: dark, light or follow system">
+        {THEME_LABEL[theme]}
+      </button>
       <button onClick={logout}>Sign out</button>
     </nav>
   );
@@ -85,7 +99,10 @@ export default function App() {
     if (!token) return;
     api
       .get<SettingsBundle>('/api/settings')
-      .then((r) => setSettings(r))
+      .then((r) => {
+        setSettings(r);
+        applyAccent(r.business.accentColor);
+      })
       .catch(() => {
         /* 401 handled by api layer */
       });

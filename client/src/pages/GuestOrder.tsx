@@ -4,11 +4,12 @@ import ComboDialog, { type ComboChoice } from '../components/ComboDialog';
 import Modal from '../components/Modal';
 import ModifierDialog, { type ModifierChoice } from '../components/ModifierDialog';
 import { formatMoney } from '../store';
+import { applyAccent } from '../theme';
 import type { Item, MenuData, ModifierSnapshot } from '../types';
 
 interface GuestInfo {
   table: { name: string; zone: string };
-  business: { name: string; currencySymbol: string };
+  business: { name: string; currencySymbol: string; accentColor?: string };
   tax: { taxLabel: string; serviceLabel: string };
   menu: MenuData;
 }
@@ -78,7 +79,10 @@ export default function GuestOrder() {
 
   useEffect(() => {
     guestGet<GuestInfo>(`/api/guest/${token}/menu`)
-      .then(setInfo)
+      .then((r) => {
+        setInfo(r);
+        applyAccent(r.business.accentColor);
+      })
       .catch((e) => setFatal(e instanceof Error ? e.message : 'Unable to load the menu'));
     loadTab();
     const id = setInterval(loadTab, 20000);

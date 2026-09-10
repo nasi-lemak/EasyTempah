@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
+import { applyAccent } from '../theme';
 import type {
   BusinessSettings,
   EinvoiceSettings,
@@ -108,6 +109,7 @@ export default function SettingsPage() {
       setEinvoiceSecret('');
       setGatewaySecret('');
       setSettings(r);
+      applyAccent(r.business.accentColor);
       setSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save');
@@ -217,6 +219,30 @@ export default function SettingsPage() {
           <div className="grow">{bField('currencySymbol', 'Currency symbol')}</div>
         </div>
         {bField('receiptFooter', 'Receipt footer')}
+        <label>Brand color (buttons and highlights on every terminal)</label>
+        <div className="row wrap" style={{ alignItems: 'center' }}>
+          {['#2dd4a7', '#4aa8ff', '#a78bfa', '#ff9d5c', '#f2635c', '#e8b93e'].map((c) => (
+            <button
+              key={c}
+              onClick={() => setBusiness({ ...business, accentColor: c })}
+              title={c}
+              aria-label={`Brand color ${c}`}
+              style={{
+                width: 34, height: 34, borderRadius: '50%', padding: 0, background: c,
+                border: business.accentColor === c ? '3px solid var(--text)' : '1px solid var(--border)',
+              }}
+            />
+          ))}
+          <input
+            type="color"
+            id="brand-color-custom"
+            value={/^#[0-9a-fA-F]{6}$/.test(business.accentColor) ? business.accentColor : '#2dd4a7'}
+            onChange={(e) => setBusiness({ ...business, accentColor: e.target.value })}
+            title="Custom color"
+            style={{ width: 44, height: 34, padding: 2 }}
+          />
+          <span className="muted small">Terminals pick it up at next sign-in or reload.</span>
+        </div>
       </div>
 
       <div className="panel mb">

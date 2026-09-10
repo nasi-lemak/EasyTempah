@@ -20,6 +20,7 @@ export const DEFAULT_BUSINESS: BusinessSettings = {
   currency: 'MYR',
   currencySymbol: 'RM',
   receiptFooter: 'Terima kasih! Please come again.',
+  accentColor: '#2dd4a7',
 };
 
 export const DEFAULT_TAX: TaxSettings = {

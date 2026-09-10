@@ -382,6 +382,7 @@ export interface BusinessSettings {
   country: string;
   currency: string;
   currencySymbol: string;
+  accentColor: string;
   receiptFooter: string;
 }
 
