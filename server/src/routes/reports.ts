@@ -157,6 +157,71 @@ reportsRouter.get('/cashiers', (req, res) => {
   res.json({ from, to, cashiers: rows.filter((r) => r.orders_opened || r.payments_taken || r.refunded_cents) });
 });
 
+/**
+ * Menu performance: per-item quantity/revenue for the range, the same for the
+ * preceding window of equal length (trend), and recipe-based unit food cost
+ * where a recipe exists (menu-engineering margin axis). Set-meal child lines
+ * are excluded — the parent set is the menu item being judged.
+ */
+reportsRouter.get('/menu', (req, res) => {
+  const { from, to } = dateRange(req);
+  const spanDays = Math.round((Date.parse(to) - Date.parse(from)) / 864e5) + 1;
+  const prevTo = new Date(Date.parse(from) - 864e5).toISOString().slice(0, 10);
+  const prevFrom = new Date(Date.parse(from) - spanDays * 864e5).toISOString().slice(0, 10);
+
+  const itemStats = (a: string, b: string) =>
+    db
+      .prepare(
+        `SELECT oi.item_id, oi.name, i.category_id, c.name AS category_name,
+           COALESCE(i.station, oi.station) AS station,
+           SUM(oi.qty) AS qty, SUM(oi.line_total_cents) AS revenue_cents
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+         LEFT JOIN items i ON i.id = oi.item_id
+         LEFT JOIN categories c ON c.id = i.category_id
+         WHERE o.status = 'paid' AND date(o.closed_at, 'localtime') BETWEEN ? AND ?
+           AND oi.status != 'cancelled' AND oi.parent_line_id IS NULL
+         GROUP BY oi.item_id, oi.name`,
+      )
+      .all(a, b) as {
+      item_id: number | null;
+      name: string;
+      category_id: number | null;
+      category_name: string | null;
+      station: string;
+      qty: number;
+      revenue_cents: number;
+    }[];
+
+  const current = itemStats(from, to);
+  const prevByKey = new Map(itemStats(prevFrom, prevTo).map((r) => [`${r.item_id}:${r.name}`, r.qty]));
+  const costs = new Map(
+    (
+      db
+        .prepare(
+          `SELECT rl.item_id, SUM(rl.qty * ing.cost_per_unit_cents) AS cost
+           FROM recipe_lines rl JOIN ingredients ing ON ing.id = rl.ingredient_id
+           GROUP BY rl.item_id`,
+        )
+        .all() as { item_id: number; cost: number }[]
+    ).map((r) => [r.item_id, Math.round(r.cost)]),
+  );
+
+  res.json({
+    from,
+    to,
+    prev_from: prevFrom,
+    prev_to: prevTo,
+    items: current
+      .map((r) => ({
+        ...r,
+        prev_qty: prevByKey.get(`${r.item_id}:${r.name}`) ?? 0,
+        unit_cost_cents: r.item_id != null ? costs.get(r.item_id) ?? null : null,
+      }))
+      .sort((a, b) => b.qty - a.qty),
+  });
+});
+
 /** Staff hours from the time clock. Entries still open count up to "now". */
 reportsRouter.get('/hours', (req, res) => {
   const { from, to } = dateRange(req);

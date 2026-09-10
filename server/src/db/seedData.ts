@@ -135,6 +135,15 @@ export function seedBaseData(): boolean {
     insertRecipe.run(1, iEgg, 1);
     insertRecipe.run(15, iTea, 8); // Teh Tarik
     insertRecipe.run(15, iCondensed, 30);
+    insertRecipe.run(3, iRice, 200); // Nasi Goreng Kampung
+    insertRecipe.run(3, iEgg, 1);
+    insertRecipe.run(3, iChicken, 60);
+    insertRecipe.run(4, iRice, 180); // Ayam Penyet + Rice
+    insertRecipe.run(4, iChicken, 220);
+    insertRecipe.run(8, iSantan, 90); // Curry Laksa
+    insertRecipe.run(8, iChicken, 60);
+    insertRecipe.run(16, iCondensed, 20); // Kopi O
+    insertRecipe.run(17, iCondensed, 45); // Milo Dinosaur
     const insertModRecipe = db.prepare(
       'INSERT INTO modifier_recipe_lines (modifier_id, ingredient_id, qty) VALUES (?, ?, ?)',
     );

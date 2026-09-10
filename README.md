@@ -44,7 +44,9 @@ kitchen displays and the back office, all over the local network.
 
 **Back office**
 - Order search across all days by order / receipt / platform number
-- Sales reports: summary KPIs, hourly chart, top items, payment mix, order-type split, per-staff attribution (orders opened, collected, refunds given — also on the live shift X-report), and one-click CSV exports (orders / items / payments) for the accountant
+- Menu performance dashboard: item popularity with quantity bars and share of sales, Food/Drinks and category filters, trend chips vs the previous equal period (▲/▼/new), and a menu-engineering quadrant plotting popularity × gross margin from ingredient-recipe costs (Stars / Plowhorses / Puzzles / Dogs)
+- Daily sales trend chart with the previous equal-length period overlaid for honest week-over-week comparison
+- Sales reports: summary KPIs, hourly chart, payment mix, order-type split, per-staff attribution (orders opened, collected, refunds given — also on the live shift X-report), and one-click CSV exports (orders / items / payments) for the accountant
 - Menu management (categories, items, modifier groups) without restarts — changes push live to terminals
 - Inventory: per-item stock tracking, automatic deduction on kitchen send, restock on void/cancel, adjustment audit trail, low-stock badges and sold-out lockout on the POS
 - Recipe-level inventory: ingredients (g/ml/pcs) with recipes on menu items and add-ons; firing a line consumes its ingredients automatically (set-meal components included), cancels and voids return them, and the back office tracks receiving, stocktakes, movement history and per-item food cost. Ingredient stock can go negative to flag counting gaps without blocking the kitchen

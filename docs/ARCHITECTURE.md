@@ -421,3 +421,21 @@ Realtime rides a dedicated `reservations` SSE channel plus the existing
 `tables` channel. No public self-booking page: bookings are staff-entered by
 design (phone/WhatsApp remains the booking channel; a public page would need
 spam and double-booking controls that a counter workflow doesn't).
+
+## Menu performance & trend dashboards
+
+`GET /api/reports/menu` aggregates paid, non-cancelled parent lines per item
+for the range (set-meal children excluded — the set is the menu item being
+judged), joins category/station for filtering, computes the same aggregate for
+the preceding equal-length window (trend chips), and attaches a unit food cost
+where the item has an ingredient recipe (`recipe_lines × cost_per_unit_cents`;
+modifier recipes and modifier revenue are deliberately out of the margin
+calculation). The client renders: a bar-list table with share-of-sales and
+▲/▼/new trend chips; a menu-engineering scatter (x = share of items sold,
+y = gross margin from realized unit revenue vs recipe cost, quadrant lines at
+the plotted means, items without recipes excluded and counted in a note); and
+a daily revenue line with the previous window overlaid dashed (zero-filled
+days, `/api/reports/daily` called for both windows). Charts are hand-rolled
+SVG on the app's theme tokens — single-hue marks plus a neutral dashed
+comparison series, so identity never rides on hue alone and the admin-set
+brand accent restyles them automatically.
