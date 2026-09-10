@@ -474,3 +474,22 @@ table.data tr.clickable:hover td { background: var(--bg-raised); }
 @media (prefers-reduced-motion: reduce) {
   .floor-node .call-bell { animation: none; }
 }
+
+/* connection-lost banner */
+.conn-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 400;
+  background: var(--danger); color: #fff;
+  text-align: center; font-weight: 700; font-size: 0.9rem;
+  padding: 0.45rem 1rem;
+}
+
+/* POS quick-search */
+.pos-search { width: 100%; margin-bottom: 0.5rem; }
+
+/* KDS all-day aggregate */
+.allday { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.allday .count {
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 0.45rem 0.8rem; font-weight: 700;
+}
+.allday .count .n { color: var(--accent); font-size: 1.2rem; margin-right: 0.35rem; }

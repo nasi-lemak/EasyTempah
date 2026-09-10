@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { TextPromptDialog } from '../components/Dialogs';
 import Modal from '../components/Modal';
 import Receipt from '../components/Receipt';
 import { hasRole, useMoney, useStore } from '../store';
@@ -70,9 +71,10 @@ export default function Orders() {
     }
   };
 
-  const voidOrder = async (orderId: number) => {
-    const reason = window.prompt('Void reason?');
-    if (!reason) return;
+  const [voidId, setVoidId] = useState<number | null>(null);
+
+  const voidOrder = async (orderId: number, reason: string) => {
+    setVoidId(null);
     setError('');
     try {
       await api.post(`/api/orders/${orderId}/void`, { reason });
@@ -143,7 +145,7 @@ export default function Orders() {
                   <button onClick={() => setEinvOrder(o)}>e-Invoice</button>
                 )}{' '}
                 {o.status === 'open' && hasRole(user, 'manager') && (
-                  <button className="danger" onClick={() => voidOrder(o.id)}>Void</button>
+                  <button className="danger" onClick={() => setVoidId(o.id)}>Void</button>
                 )}
               </td>
             </tr>
@@ -153,6 +155,18 @@ export default function Orders() {
           )}
         </tbody>
       </table>
+
+      {voidId != null && (
+        <TextPromptDialog
+          title="Void order"
+          label="Reason (goes to the audit log)"
+          placeholder="Wrong table / customer left…"
+          confirmLabel="Void order"
+          danger
+          onSubmit={(reason) => voidOrder(voidId, reason)}
+          onClose={() => setVoidId(null)}
+        />
+      )}
 
       {receipt && (
         <Modal title={`Receipt #${receipt.order.order_no}`} onClose={() => setReceipt(null)}>

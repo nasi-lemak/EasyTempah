@@ -19,6 +19,15 @@ export function useEvents(channels: Channel[], onEvent: () => void): void {
     const source = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
     const handler = () => cbRef.current();
     for (const ch of key.split(',')) source.addEventListener(ch, handler);
+    // Surface server reachability: EventSource retries on its own; when it
+    // reconnects, refresh so the screen catches up on anything missed.
+    source.onopen = () => {
+      if (!useStore.getState().connected) {
+        useStore.getState().setConnected(true);
+        cbRef.current();
+      }
+    };
+    source.onerror = () => useStore.getState().setConnected(false);
     return () => source.close();
   }, [token, key]);
 }

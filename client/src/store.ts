@@ -41,6 +41,9 @@ interface AppState {
   receipts: ReceiptsSettings | null;
   logo: string;
   demo: DemoSettings | null;
+  /** False while the live connection to the shop server is down (SSE dropped). */
+  connected: boolean;
+  setConnected: (up: boolean) => void;
   setAuth: (token: string, user: AuthUser) => void;
   clearAuth: () => void;
   setSettings: (bundle: SettingsBundle) => void;
@@ -71,6 +74,8 @@ export const useStore = create<AppState>((set) => ({
   receipts: null,
   logo: '',
   demo: null,
+  connected: true,
+  setConnected: (up) => set({ connected: up }),
   setAuth: (token, user) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ token, user }));
     set({ token, user });

@@ -279,6 +279,76 @@ export function renderReceipt(
   return p.build();
 }
 
+/**
+ * Shift report slip: X while the shift is open, Z at close. Sales by channel
+ * and cashier, drawer math, refunds — the slip that goes in the cash bag.
+ */
+export function renderShiftReport(info: {
+  shift: {
+    id: number;
+    status: string;
+    opened_at: string;
+    closed_at: string | null;
+    opening_float_cents: number;
+    counted_cash_cents: number | null;
+    variance_cents: number | null;
+  };
+  summary: {
+    total_sales_cents: number;
+    cash_sales_cents: number;
+    orders_paid: number;
+    cash_in_cents: number;
+    cash_out_cents: number;
+    refunds_cents: number;
+    cash_refunds_cents: number;
+    expected_cash_cents: number;
+    by_channel: { channel: string; payments: number; amount_cents: number }[];
+    by_cashier: { name: string; payments: number; amount_cents: number }[];
+  };
+  business: BusinessSettings;
+  charset?: PrinterCharset;
+}): Buffer {
+  const { shift, summary, business } = info;
+  const sym = business.currencySymbol + ' ';
+  const kind = shift.status === 'closed' ? 'Z REPORT (shift closed)' : 'X REPORT (shift open)';
+  const p = new EscPos(info.charset ?? 'ascii').init();
+  p.align('center').bold(true).size(2).line(business.name).size(1).bold(false);
+  p.line(kind).line(`Shift #${shift.id}`);
+  p.line(`${shift.opened_at} -> ${shift.closed_at ?? 'now'}`);
+  p.align('left').rule('=');
+
+  p.cols('Orders paid', String(summary.orders_paid));
+  p.bold(true).cols('Total sales', rm(summary.total_sales_cents, sym)).bold(false);
+  p.rule();
+  p.line('Sales by channel');
+  for (const c of summary.by_channel) p.cols(`  ${c.channel} (${c.payments}x)`, rm(c.amount_cents, sym));
+  if (summary.by_cashier.length > 1) {
+    p.rule();
+    p.line('By cashier');
+    for (const c of summary.by_cashier) p.cols(`  ${c.name} (${c.payments}x)`, rm(c.amount_cents, sym));
+  }
+  p.rule();
+  p.line('Drawer');
+  p.cols('  Opening float', rm(shift.opening_float_cents, sym));
+  p.cols('  Cash sales', rm(summary.cash_sales_cents, sym));
+  if (summary.cash_in_cents) p.cols('  Paid in', rm(summary.cash_in_cents, sym));
+  if (summary.cash_out_cents) p.cols('  Paid out', '-' + rm(summary.cash_out_cents, sym));
+  if (summary.cash_refunds_cents) p.cols('  Cash refunds', '-' + rm(summary.cash_refunds_cents, sym));
+  p.bold(true).cols('  Expected in drawer', rm(summary.expected_cash_cents, sym)).bold(false);
+  if (shift.counted_cash_cents != null) {
+    p.cols('  Counted', rm(shift.counted_cash_cents, sym));
+    p.bold(true).cols('  VARIANCE', rm(shift.variance_cents ?? 0, sym)).bold(false);
+  }
+  if (summary.refunds_cents) {
+    p.rule();
+    p.cols('Refunds (all methods)', '-' + rm(summary.refunds_cents, sym));
+  }
+  p.rule('=');
+  p.align('center').line(`Printed ${new Date().toLocaleString('en-MY', { hour12: false })}`);
+  p.feed(3).cut();
+  return p.build();
+}
+
 export interface TicketLine {
   qty: number;
   name: string;

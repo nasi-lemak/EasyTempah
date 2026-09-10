@@ -21,6 +21,17 @@ import Customers from './pages/Customers';
 import Einvoices from './pages/Einvoices';
 import PaymentQr from './pages/PaymentQr';
 
+/** Shown the moment the live connection to the shop server drops. */
+function ConnectionBanner() {
+  const connected = useStore((s) => s.connected);
+  if (connected) return null;
+  return (
+    <div className="conn-banner" role="alert">
+      ⚠ Connection to the shop server lost — reconnecting… Numbers on screen may be stale.
+    </div>
+  );
+}
+
 /** Floating reminder that every number on screen came from `npm run seed:demo`. */
 function DemoBadge() {
   const demo = useStore((s) => s.demo);
@@ -35,17 +46,63 @@ function DemoBadge() {
 const THEME_LABEL: Record<ThemePref, string> = { dark: '🌙 Dark', light: '☀️ Light', system: '🖥 Auto' };
 const THEME_NEXT: Record<ThemePref, ThemePref> = { dark: 'light', light: 'system', system: 'dark' };
 
+const LOCK_KEY = 'easytempah.autolock';
+const LOCK_STEPS = [0, 2, 5, 15]; // minutes; 0 = off
+
+function getLockMinutes(): number {
+  try {
+    const v = parseFloat(localStorage.getItem(LOCK_KEY) ?? '0');
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Per-device idle lock: after N quiet minutes, return this terminal to the
+ * PIN screen. Kitchen accounts are exempt — a KDS is glanced at, not touched.
+ */
+function useIdleLock() {
+  const user = useStore((s) => s.user);
+  const clearAuth = useStore((s) => s.clearAuth);
+  useEffect(() => {
+    if (!user || user.role === 'kitchen') return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(timer);
+      const mins = getLockMinutes();
+      if (mins > 0) timer = setTimeout(() => clearAuth(), mins * 60_000);
+    };
+    const events = ['pointerdown', 'keydown', 'touchstart'] as const;
+    for (const e of events) window.addEventListener(e, arm, { passive: true });
+    arm();
+    return () => {
+      clearTimeout(timer);
+      for (const e of events) window.removeEventListener(e, arm);
+    };
+  }, [user, clearAuth]);
+}
+
 function Sidebar() {
   const user = useStore((s) => s.user);
   const business = useStore((s) => s.business);
   const clearAuth = useStore((s) => s.clearAuth);
   const navigate = useNavigate();
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
+  const [lockMins, setLockMins] = useState(getLockMinutes);
 
   const cycleTheme = () => {
     const next = THEME_NEXT[theme];
     applyThemePref(next);
     setTheme(next);
+  };
+
+  const cycleLock = () => {
+    const next = LOCK_STEPS[(LOCK_STEPS.indexOf(lockMins) + 1) % LOCK_STEPS.length] ?? 0;
+    try {
+      localStorage.setItem(LOCK_KEY, String(next));
+    } catch { /* per-device convenience */ }
+    setLockMins(next);
   };
 
   const logout = async () => {
@@ -86,6 +143,11 @@ function Sidebar() {
       <button onClick={cycleTheme} title="Theme for this device: dark, light or follow system">
         {THEME_LABEL[theme]}
       </button>
+      {user?.role !== 'kitchen' && (
+        <button onClick={cycleLock} title="Return this terminal to the PIN screen after idle time">
+          🔒 {lockMins === 0 ? 'Lock off' : `Lock ${lockMins}m`}
+        </button>
+      )}
       <button onClick={logout}>Sign out</button>
     </nav>
   );
@@ -96,6 +158,7 @@ export default function App() {
   const user = useStore((s) => s.user);
   const setSettings = useStore((s) => s.setSettings);
   const location = useLocation();
+  useIdleLock();
 
   useEffect(() => {
     if (!token) return;
@@ -131,6 +194,7 @@ export default function App() {
 
   return (
     <div className="shell">
+      <ConnectionBanner />
       <DemoBadge />
       <Sidebar />
       <main className="main">

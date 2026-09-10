@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import ComboDialog, { type ComboChoice } from '../components/ComboDialog';
+import { ConfirmDialog, TextPromptDialog } from '../components/Dialogs';
 import Modal from '../components/Modal';
 import ModifierDialog, { type ModifierChoice } from '../components/ModifierDialog';
 import PayDialog from '../components/PayDialog';
@@ -34,6 +35,10 @@ export default function Pos() {
   const [showPay, setShowPay] = useState(false);
   const [showDiscount, setShowDiscount] = useState(false);
   const [showOpenItem, setShowOpenItem] = useState(false);
+  const [itemQuery, setItemQuery] = useState('');
+  const [showVoid, setShowVoid] = useState(false);
+  const [priceLine, setPriceLine] = useState<{ id: number; name: string; cents: number } | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState<{ id: number; name: string } | null>(null);
   const [showSplit, setShowSplit] = useState(false);
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
   const [showDelivery, setShowDelivery] = useState(false);
@@ -61,10 +66,13 @@ export default function Pos() {
 
   const categories = menu?.categories ?? [];
   const catId = activeCat ?? categories[0]?.id ?? null;
-  const items = useMemo(
-    () => (menu?.items ?? []).filter((i) => i.category_id === catId),
-    [menu, catId],
-  );
+  // Searching looks across the whole menu, not just the active category.
+  const items = useMemo(() => {
+    const all = menu?.items ?? [];
+    const q = itemQuery.trim().toLowerCase();
+    if (q) return all.filter((i) => i.name.toLowerCase().includes(q));
+    return all.filter((i) => i.category_id === catId);
+  }, [menu, catId, itemQuery]);
 
   const run = async (fn: () => Promise<unknown>) => {
     setError('');
@@ -125,6 +133,7 @@ export default function Pos() {
   const tapItem = (item: Item) => {
     if (!order) return;
     if (item.track_stock && item.stock_qty <= 0) return;
+    setItemQuery(''); // picked — return to the category view for the next item
     if (item.is_combo) {
       setComboItem(item);
     } else if (itemHasModifiers(item)) {
@@ -157,9 +166,8 @@ export default function Pos() {
       setOrder(r.order);
     });
 
-  const voidOrder = () => {
-    const reason = window.prompt('Void reason?');
-    if (!reason) return;
+  const voidOrder = (reason: string) => {
+    setShowVoid(false);
     run(async () => {
       if (!order) return;
       await api.post(`/api/orders/${order.id}/void`, { reason });
@@ -220,6 +228,12 @@ export default function Pos() {
   return (
     <div className="pos-layout">
       <div className="pos-menu">
+        <input
+          className="pos-search"
+          placeholder="🔍 Search menu…"
+          value={itemQuery}
+          onChange={(e) => setItemQuery(e.target.value)}
+        />
         <div className="cat-tabs">
           {categories.map((c) => (
             <button key={c.id} className={c.id === catId ? 'active' : ''} onClick={() => setActiveCat(c.id)}>
@@ -299,23 +313,7 @@ export default function Pos() {
                           {hasRole(user, 'manager') && (
                             <button
                               className="ghost small"
-                              onClick={() => {
-                                const v = window.prompt(
-                                  `New unit price for ${line.name} (RM)`,
-                                  (line.unit_price_cents / 100).toFixed(2),
-                                );
-                                if (v === null) return;
-                                const cents = Math.round(parseFloat(v) * 100);
-                                if (Number.isInteger(cents) && cents >= 0) {
-                                  run(async () => {
-                                    const r = await api.patch<{ order: Order }>(
-                                      `/api/orders/${order.id}/items/${line.id}`,
-                                      { unit_price_cents: cents },
-                                    );
-                                    setOrder(r.order);
-                                  });
-                                }
-                              }}
+                              onClick={() => setPriceLine({ id: line.id, name: line.name, cents: line.unit_price_cents })}
                             >
                               price
                             </button>
@@ -323,7 +321,15 @@ export default function Pos() {
                         </>
                       )}
                       <div className="grow" />
-                      <button className="ghost small" style={{ color: 'var(--danger)' }} onClick={() => cancelLine(line.id)}>
+                      <button
+                        className="ghost small"
+                        style={{ color: 'var(--danger)' }}
+                        onClick={() =>
+                          line.status === 'pending'
+                            ? cancelLine(line.id) // not sent yet — nothing to undo in the kitchen
+                            : setConfirmCancel({ id: line.id, name: line.name })
+                        }
+                      >
                         remove
                       </button>
                     </div>
@@ -382,7 +388,7 @@ export default function Pos() {
                 Pay · {money(order.total_cents - order.paid_cents)}
               </button>
               {hasRole(user, 'manager') && (
-                <button className="danger full" onClick={voidOrder}>Void order</button>
+                <button className="danger full" onClick={() => setShowVoid(true)}>Void order</button>
               )}
             </div>
           )}
@@ -407,6 +413,51 @@ export default function Pos() {
             navigate(`/pos/${newId}`);
           }}
           onClose={() => setShowSplit(false)}
+        />
+      )}
+      {showVoid && (
+        <TextPromptDialog
+          title="Void order"
+          label="Reason (goes to the audit log)"
+          placeholder="Wrong table / customer left…"
+          confirmLabel="Void order"
+          danger
+          onSubmit={voidOrder}
+          onClose={() => setShowVoid(false)}
+        />
+      )}
+      {priceLine && (
+        <TextPromptDialog
+          title={`New price — ${priceLine.name}`}
+          label="Unit price (RM)"
+          initial={(priceLine.cents / 100).toFixed(2)}
+          inputMode="decimal"
+          confirmLabel="Set price"
+          onSubmit={(v) => {
+            const cents = Math.round(parseFloat(v) * 100);
+            setPriceLine(null);
+            if (!Number.isInteger(cents) || cents < 0) return;
+            run(async () => {
+              const r = await api.patch<{ order: Order }>(`/api/orders/${order.id}/items/${priceLine.id}`, {
+                unit_price_cents: cents,
+              });
+              setOrder(r.order);
+            });
+          }}
+          onClose={() => setPriceLine(null)}
+        />
+      )}
+      {confirmCancel && (
+        <ConfirmDialog
+          title="Remove sent item?"
+          message={`"${confirmCancel.name}" is already in the kitchen. Removing it puts stock back and takes it off the ticket.`}
+          confirmLabel="Remove item"
+          danger
+          onConfirm={() => {
+            cancelLine(confirmCancel.id);
+            setConfirmCancel(null);
+          }}
+          onClose={() => setConfirmCancel(null)}
         />
       )}
       {showOpenItem && (

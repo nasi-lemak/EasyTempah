@@ -28,6 +28,19 @@ export default function ShiftPage() {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [closed, setClosed] = useState<{ variance_cents: number } | null>(null);
+  const [closedShiftId, setClosedShiftId] = useState<number | null>(null);
+  const [printMsg, setPrintMsg] = useState('');
+
+  const printReport = async (shiftId: number) => {
+    setPrintMsg('');
+    setError('');
+    try {
+      await api.post(`/api/print/shift/${shiftId}`);
+      setPrintMsg('Report sent to the receipt printer ✓');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Print failed');
+    }
+  };
 
   const load = useCallback(() => {
     api
@@ -76,6 +89,7 @@ export default function ShiftPage() {
   const doClose = async () => {
     setError('');
     try {
+      setClosedShiftId(shift?.id ?? null);
       const r = await api.post<{ variance_cents: number }>('/api/shifts/close', {
         counted_cash_cents: cents(),
         notes: notes || undefined,
@@ -103,6 +117,13 @@ export default function ShiftPage() {
               <strong style={{ color: closed.variance_cents === 0 ? 'var(--accent)' : 'var(--danger)' }}>
                 {money(closed.variance_cents)}
               </strong>
+              {closedShiftId != null && (
+                <>
+                  {' '}
+                  <button className="small" onClick={() => printReport(closedShiftId)}>🖨 Print Z-report</button>
+                </>
+              )}
+              {printMsg && <div className="small" style={{ color: 'var(--accent)' }}>{printMsg}</div>}
             </div>
           )}
         </div>
@@ -122,10 +143,14 @@ export default function ShiftPage() {
     <div>
       <div className="row mb">
         <h1 className="grow">Shift #{shift.id}</h1>
+        <button onClick={() => printReport(shift.id)} title="Print the live X-report to the receipt printer">
+          🖨 X-report
+        </button>
         <button onClick={() => setShowMove('in')}>Cash in</button>
         <button onClick={() => setShowMove('out')}>Cash out</button>
         <button className="danger" onClick={() => setShowClose(true)}>Close shift</button>
       </div>
+      {printMsg && <div className="small mb" style={{ color: 'var(--accent)' }}>{printMsg}</div>}
       <div className="muted small mb">Opened {formatDateTime(shift.opened_at)} · float {money(shift.opening_float_cents)}</div>
 
       {summary && (

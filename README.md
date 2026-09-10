@@ -30,6 +30,7 @@ kitchen displays and the back office, all over the local network.
 **Kitchen**
 - Real-time Kitchen Display System with per-station routing (kitchen / bar)
 - New-ticket chime (synthesized, per-screen mute) so the kitchen hears orders arrive
+- All-day view: outstanding totals per dish across every ticket, for batch cooking during a rush
 - Ticket aging with color thresholds, per-line and whole-ticket bumping
   (`sent → preparing → ready → served`), and a recall list to un-bump recently served lines
 
@@ -39,6 +40,7 @@ kitchen displays and the back office, all over the local network.
 - Staff time clock: clock in/out by PIN from the login screen (no sign-in), hours per staff on Reports
 - Live X-report (sales by method, expected drawer) and end-of-shift
   reconciliation with variance tracking
+- Printed X/Z report slips to the thermal printer (sales by channel and cashier, drawer math, variance) — the Z slip goes in the cash bag
 
 **Back office**
 - Order search across all days by order / receipt / platform number
@@ -50,6 +52,7 @@ kitchen displays and the back office, all over the local network.
 - Users & roles (admin / manager / cashier / kitchen) with PIN sign-in
 - Appearance: dark and light themes with a per-terminal toggle (or follow-system), and an admin-set brand color applied to every terminal and the guest QR pages
 - Business settings: identity, receipt footer, tax, service charge (per-order-type — dine-in only by default per MY/SG convention, fully toggleable), cash rounding, and one-click country presets (🇲🇾 RM/SST 6%, 🇸🇬 S$/GST 9%) — every value stays individually editable for other markets
+- Trust & resilience: a red banner the moment a terminal loses the server (auto-clears on reconnect and refreshes missed state), per-device idle auto-lock back to the PIN screen (kitchen screens exempt), POS menu quick-search across categories, and consistent in-app dialogs for voids, price overrides, sent-item removal and QR rotation
 - Hardening & ops: PIN brute-force lockout (5 failures → 5-minute IP lock), manager-gated per-line price overrides, and automatic daily SQLite backups (14 kept) with a back-up-now button
 - Demo mode: `npm run seed:demo` generates weeks of realistic sales history (shifts, refunds, members, platform orders, live kitchen tickets) for showrooms and training, with a DEMO DATA badge on every screen, a production-database guard, and one-command reset
 - Audit log of sensitive actions (voids, discounts, shift events)

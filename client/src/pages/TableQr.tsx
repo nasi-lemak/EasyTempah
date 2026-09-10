@@ -1,6 +1,7 @@
 import QRCode from 'qrcode';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
+import { ConfirmDialog } from '../components/Dialogs';
 import { useStore } from '../store';
 import type { DiningTable } from '../types';
 
@@ -34,8 +35,10 @@ export default function TableQr() {
     };
   }, [tables]);
 
+  const [rotateFor, setRotateFor] = useState<DiningTable | null>(null);
+
   const rotate = async (t: DiningTable) => {
-    if (!window.confirm(`Generate a new code for ${t.name}? The printed code stops working.`)) return;
+    setRotateFor(null);
     setError('');
     try {
       await api.post(`/api/tables/${t.id}/qr-rotate`);
@@ -57,6 +60,16 @@ export default function TableQr() {
         the printed one (e.g. if a code leaks or a card walks off).
       </p>
       {error && <div className="error-text mb no-print">{error}</div>}
+      {rotateFor && (
+        <ConfirmDialog
+          title={`New code for ${rotateFor.name}?`}
+          message="The code printed on the table stops working the moment you generate a new one — reprint and replace it."
+          confirmLabel="Generate new code"
+          danger
+          onConfirm={() => rotate(rotateFor)}
+          onClose={() => setRotateFor(null)}
+        />
+      )}
 
       <div className="qr-sheet">
         {tables.map((t) => (
@@ -66,7 +79,7 @@ export default function TableQr() {
             <div className="qr-zone">{t.zone}</div>
             {codes[t.id] ? <img src={codes[t.id]} alt={`QR code for table ${t.name}`} /> : <div className="muted small">…</div>}
             <div className="qr-hint">Scan to order</div>
-            <button className="no-print small" onClick={() => rotate(t)}>New code</button>
+            <button className="no-print small" onClick={() => setRotateFor(t)}>New code</button>
           </div>
         ))}
       </div>

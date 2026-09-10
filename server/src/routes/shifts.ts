@@ -15,7 +15,7 @@ function openShift(): Shift | undefined {
     | undefined;
 }
 
-interface ShiftSummary {
+export interface ShiftSummary {
   cash_sales_cents: number;
   card_sales_cents: number;
   ewallet_sales_cents: number;
@@ -31,7 +31,7 @@ interface ShiftSummary {
   by_cashier: { name: string; payments: number; amount_cents: number }[];
 }
 
-function summarize(shift: Shift): ShiftSummary {
+export function summarize(shift: Shift): ShiftSummary {
   const pay = db
     .prepare(
       `SELECT method, SUM(amount_cents) AS amount, COUNT(DISTINCT order_id) AS orders

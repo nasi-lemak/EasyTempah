@@ -7,7 +7,9 @@ import net from 'net';
 import { db } from '../db/connection';
 import { ApiError } from '../middleware/errors';
 import { portalUrl } from './einvoice/client';
-import { renderKitchenTicket, renderReceipt, EscPos, type TicketLine } from './escpos';
+import { renderKitchenTicket, renderReceipt, renderShiftReport, EscPos, type TicketLine } from './escpos';
+import { summarize } from '../routes/shifts';
+import type { Shift } from '../types';
 import { parseLogoDataUrl, pngToRaster } from './logo';
 import { getOrder } from './orders';
 import { makeLabels } from './receiptLang';
@@ -116,6 +118,21 @@ export async function printKitchenTickets(orderId: number, lineIds: number[]): P
   } catch (err) {
     console.error(`Kitchen ticket print failed for order ${orderId}:`, err instanceof Error ? err.message : err);
   }
+}
+
+/** X/Z shift report to the receipt printer (X while open, Z once closed). */
+export async function printShiftReport(shiftId: number): Promise<void> {
+  const printers = getPrintersSettings();
+  if (!printers.receipt.enabled) throw new ApiError(409, 'Receipt printer is not enabled in Settings');
+  const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shiftId) as Shift | undefined;
+  if (!shift) throw new ApiError(404, 'Shift not found');
+  const doc = renderShiftReport({
+    shift,
+    summary: summarize(shift),
+    business: getBusinessSettings(),
+    charset: printers.receipt.charset ?? 'ascii',
+  });
+  await sendToPrinter(printers.receipt, doc);
 }
 
 export async function testPrint(which: 'receipt' | 'kitchen' | 'bar'): Promise<void> {

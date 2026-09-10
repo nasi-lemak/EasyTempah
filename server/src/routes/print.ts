@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { AuthedRequest, requireAuth, requireRole } from '../middleware/auth';
 import { badRequest } from '../middleware/errors';
 import { audit } from '../services/audit';
-import { printKitchenTickets, printReceipt, testPrint } from '../services/printer';
+import { printKitchenTickets, printReceipt, printShiftReport, testPrint } from '../services/printer';
 import { getOrder } from '../services/orders';
 
 export const printRouter = Router();
@@ -30,6 +30,16 @@ printRouter.post('/kitchen/:orderId', (req: AuthedRequest, res, next) => {
   // Reprint surfaces errors (unlike the fire-and-forget path) so staff see a dead printer.
   printKitchenTickets(orderId, ids)
     .then(() => res.json({ ok: true, lines: ids.length }))
+    .catch(next);
+});
+
+/** X/Z shift report slip (X while open, Z after close). */
+printRouter.post('/shift/:shiftId', (req: AuthedRequest, res, next) => {
+  printShiftReport(Number(req.params.shiftId))
+    .then(() => {
+      audit(req.user!.id, 'print.shift_report', { shiftId: Number(req.params.shiftId) });
+      res.json({ ok: true });
+    })
     .catch(next);
 });
 

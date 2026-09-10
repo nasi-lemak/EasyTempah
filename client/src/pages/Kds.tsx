@@ -45,6 +45,7 @@ export default function Kds() {
   const [tickets, setTickets] = useState<KdsTicket[]>([]);
   const [station, setStation] = useState<Station | 'all'>('all');
   const [showRecall, setShowRecall] = useState(false);
+  const [showAllDay, setShowAllDay] = useState(false);
   const [recent, setRecent] = useState<RecentLine[]>([]);
   const [, forceTick] = useState(0);
   const [sound, setSound] = useState(() => {
@@ -101,6 +102,9 @@ export default function Kds() {
             {s === 'all' ? 'All stations' : s[0].toUpperCase() + s.slice(1)}
           </button>
         ))}
+        <button className={showAllDay ? 'primary' : ''} onClick={() => setShowAllDay(!showAllDay)}>
+          All day
+        </button>
         <button className={showRecall ? 'primary' : ''} onClick={() => setShowRecall(!showRecall)}>
           Recall{recent.length > 0 ? ` (${recent.length})` : ''}
         </button>
@@ -118,6 +122,32 @@ export default function Kds() {
           {sound ? '🔔 Sound on' : '🔕 Muted'}
         </button>
       </div>
+
+      {showAllDay && (
+        <div className="panel mb">
+          <h2>All day — outstanding across every ticket</h2>
+          {(() => {
+            // Batch view for the line: total qty per dish still to cook (sent + preparing).
+            const counts = new Map<string, number>();
+            for (const t of tickets) {
+              for (const l of t.lines) {
+                if (l.status === 'sent' || l.status === 'preparing') {
+                  counts.set(l.name, (counts.get(l.name) ?? 0) + l.qty);
+                }
+              }
+            }
+            const rows = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+            if (rows.length === 0) return <div className="muted">Nothing outstanding. 🎉</div>;
+            return (
+              <div className="allday">
+                {rows.map(([name, qty]) => (
+                  <span key={name} className="count"><span className="n">{qty}×</span>{name}</span>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {showRecall && (
         <div className="panel mb">
