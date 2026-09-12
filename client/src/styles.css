@@ -366,6 +366,11 @@ table.data tr.clickable:hover td { background: var(--bg-raised); }
 .kds-ticket .age { font-weight: 700; }
 .kds-ticket .age.warn { color: var(--warn); }
 .kds-ticket .age.late { color: var(--danger); }
+/* Whole-card escalation: pace is readable from across the kitchen. */
+.kds-ticket.warn { border-color: var(--warn); }
+.kds-ticket.warn .head { background: color-mix(in srgb, var(--warn) 18%, var(--bg-raised)); }
+.kds-ticket.late { border-color: var(--danger); border-width: 2px; }
+.kds-ticket.late .head { background: color-mix(in srgb, var(--danger) 22%, var(--bg-raised)); }
 .kds-line { padding: 0.55rem 0.8rem; border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent); display: flex; gap: 0.6rem; align-items: flex-start; }
 .kds-line .qty { font-weight: 800; color: var(--accent); min-width: 2rem; }
 .kds-line .mods { color: var(--text-dim); font-size: 0.8rem; }

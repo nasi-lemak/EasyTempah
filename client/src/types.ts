@@ -280,6 +280,16 @@ export interface GuestSettings {
   orderBurst: number;
 }
 
+export interface KdsSettings {
+  warnMinutes: number;
+  lateMinutes: number;
+}
+
+export interface TerminalSettings {
+  sessionHours: number;
+  idleLockDefaultMinutes: number;
+}
+
 /** Scheduled automatic discount (happy hour etc.), managed under Menu → Promos. */
 export interface Promotion {
   id: number;

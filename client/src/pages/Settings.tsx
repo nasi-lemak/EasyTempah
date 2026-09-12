@@ -7,12 +7,14 @@ import type {
   EinvoiceSettings,
   GatewaySettings,
   GuestSettings,
+  KdsSettings,
   LoyaltySettings,
   PaymentsSettings,
   PlatformsSettings,
   PrintersSettings,
   ReceiptsSettings,
   TaxSettings,
+  TerminalSettings,
 } from '../types';
 
 type SettingsPayload = {
@@ -25,6 +27,8 @@ type SettingsPayload = {
   platforms: PlatformsSettings;
   loyalty: LoyaltySettings;
   guest: GuestSettings;
+  kds: KdsSettings;
+  terminals: TerminalSettings;
   receipts: ReceiptsSettings;
   logo: string;
 };
@@ -44,6 +48,8 @@ export default function SettingsPage() {
   const [platforms, setPlatforms] = useState<PlatformsSettings | null>(null);
   const [loyalty, setLoyalty] = useState<LoyaltySettings | null>(null);
   const [guest, setGuest] = useState<GuestSettings | null>(null);
+  const [kds, setKds] = useState<KdsSettings | null>(null);
+  const [terminals, setTerminals] = useState<TerminalSettings | null>(null);
   const [receipts, setReceipts] = useState<ReceiptsSettings | null>(null);
   const [logo, setLogo] = useState('');
   const [saved, setSaved] = useState(false);
@@ -75,13 +81,15 @@ export default function SettingsPage() {
         setPlatforms(r.platforms);
         setLoyalty(r.loyalty);
         setGuest(r.guest);
+        setKds(r.kds);
+        setTerminals(r.terminals);
         setReceipts(r.receipts);
         setLogo(r.logo ?? '');
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, []);
 
-  if (!business || !tax || !printers || !payments || !einvoice || !gateway || !platforms || !loyalty || !guest || !receipts) {
+  if (!business || !tax || !printers || !payments || !einvoice || !gateway || !platforms || !loyalty || !guest || !kds || !terminals || !receipts) {
     return <div className="muted">Loading…</div>;
   }
 
@@ -99,6 +107,8 @@ export default function SettingsPage() {
         platforms,
         loyalty,
         guest,
+        kds,
+        terminals,
         receipts,
       });
       setBusiness(r.business);
@@ -110,6 +120,8 @@ export default function SettingsPage() {
       setPlatforms(r.platforms);
       setLoyalty(r.loyalty);
       setGuest(r.guest);
+      setKds(r.kds);
+      setTerminals(r.terminals);
       setReceipts(r.receipts);
       setLogo(r.logo ?? '');
       setEinvoiceSecret('');
@@ -508,6 +520,51 @@ export default function SettingsPage() {
           limit, the guests see "staff is on the way" and the 🔔 bell rings on the Tables screen
           automatically; nobody's cart is ever lost. Turn it off only if your network is fully
           trusted.
+        </div>
+      </div>
+
+      <div className="panel mb">
+        <h2>Kitchen display timing</h2>
+        <div className="row">
+          <div className="grow mb">
+            <label>Turn amber after (minutes)</label>
+            <input type="number" min={1} value={kds.warnMinutes}
+              onChange={(e) => setKds({ ...kds, warnMinutes: Math.floor(Number(e.target.value) || 0) })}
+              style={{ width: '100%' }} />
+          </div>
+          <div className="grow mb">
+            <label>Turn red after (minutes)</label>
+            <input type="number" min={2} max={120} value={kds.lateMinutes}
+              onChange={(e) => setKds({ ...kds, lateMinutes: Math.floor(Number(e.target.value) || 0) })}
+              style={{ width: '100%' }} />
+          </div>
+        </div>
+        <div className="muted small">
+          Match your service promise: a noodle stall might use 5/10, a grill 12/20. The whole
+          ticket card changes colour, so pace is readable from across the kitchen.
+        </div>
+      </div>
+
+      <div className="panel mb">
+        <h2>Terminals</h2>
+        <div className="row">
+          <div className="grow mb">
+            <label>Sign-in stays valid for (hours)</label>
+            <input type="number" min={1} max={48} value={terminals.sessionHours}
+              onChange={(e) => setTerminals({ ...terminals, sessionHours: Math.floor(Number(e.target.value) || 0) })}
+              style={{ width: '100%' }} />
+          </div>
+          <div className="grow mb">
+            <label>Idle lock default (minutes, 0 = off)</label>
+            <input type="number" min={0} max={120} value={terminals.idleLockDefaultMinutes}
+              onChange={(e) => setTerminals({ ...terminals, idleLockDefaultMinutes: Math.floor(Number(e.target.value) || 0) })}
+              style={{ width: '100%' }} />
+          </div>
+        </div>
+        <div className="muted small">
+          A 24-hour venue can stretch sign-ins past a mall unit's day; the idle lock returns
+          untouched terminals to the PIN screen venue-wide (each device's own 🔒 choice in the
+          sidebar still overrides it). Kitchen screens never auto-lock.
         </div>
       </div>
 

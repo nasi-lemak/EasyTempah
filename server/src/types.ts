@@ -190,6 +190,20 @@ export interface GuestSettings {
   orderBurst: number;
 }
 
+/** Kitchen-display pacing — a noodle stall's "late" is not a grill's. */
+export interface KdsSettings {
+  warnMinutes: number;
+  lateMinutes: number;
+}
+
+/** Terminal/session behavior shared by every till in the venue. */
+export interface TerminalSettings {
+  /** Hours a PIN sign-in stays valid (24h venues want longer than mall units). */
+  sessionHours: number;
+  /** Default idle minutes before a terminal returns to the PIN screen (0 = off); each device can still override locally. */
+  idleLockDefaultMinutes: number;
+}
+
 export interface OrderItemModifierSnapshot {
   modifier_id: number;
   group_name: string;

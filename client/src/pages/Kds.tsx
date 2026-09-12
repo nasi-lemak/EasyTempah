@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import { useStore } from '../store';
 import type { KdsLine, KdsTicket, Station } from '../types';
 import { minutesSince } from '../time';
 import { useEvents } from '../useEvents';
@@ -42,6 +43,9 @@ interface RecentLine extends KdsLine {
 }
 
 export default function Kds() {
+  const kdsSettings = useStore((st) => st.kds);
+  const warnMins = kdsSettings?.warnMinutes ?? 8;
+  const lateMins = kdsSettings?.lateMinutes ?? 15;
   const [tickets, setTickets] = useState<KdsTicket[]>([]);
   const [station, setStation] = useState<Station | 'all'>('all');
   const [showRecall, setShowRecall] = useState(false);
@@ -170,9 +174,9 @@ export default function Kds() {
       <div className="kds-grid">
         {tickets.map((t) => {
           const mins = ageMinutes(t.sent_at);
-          const ageClass = mins >= 15 ? 'late' : mins >= 8 ? 'warn' : '';
+          const ageClass = mins >= lateMins ? 'late' : mins >= warnMins ? 'warn' : '';
           return (
-            <div key={t.order_id} className="kds-ticket">
+            <div key={t.order_id} className={`kds-ticket ${ageClass}`}>
               <div className="head">
                 <strong>
                   {t.table_name ? `Table ${t.table_name}` : t.type.replace('_', ' ')} · #{t.order_no.slice(-4)}

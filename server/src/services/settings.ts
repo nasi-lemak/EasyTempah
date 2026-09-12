@@ -4,6 +4,8 @@ import type {
   EinvoiceSettings,
   GatewaySettings,
   GuestSettings,
+  KdsSettings,
+  TerminalSettings,
   LoyaltySettings,
   PaymentsSettings,
   PlatformsSettings,
@@ -171,6 +173,24 @@ export const DEFAULT_GUEST: GuestSettings = {
 
 export function getGuestSettings(): GuestSettings {
   return { ...DEFAULT_GUEST, ...getSetting('guest', DEFAULT_GUEST) };
+}
+
+export const DEFAULT_KDS: KdsSettings = {
+  warnMinutes: 8,
+  lateMinutes: 15,
+};
+
+export function getKdsSettings(): KdsSettings {
+  return { ...DEFAULT_KDS, ...getSetting('kds', DEFAULT_KDS) };
+}
+
+export const DEFAULT_TERMINALS: TerminalSettings = {
+  sessionHours: 12,
+  idleLockDefaultMinutes: 0,
+};
+
+export function getTerminalSettings(): TerminalSettings {
+  return { ...DEFAULT_TERMINALS, ...getSetting('terminals', DEFAULT_TERMINALS) };
 }
 
 export const DEFAULT_GATEWAY: GatewaySettings = {

@@ -3,7 +3,23 @@ import type { NextFunction, Request, Response } from 'express';
 import { db } from '../db/connection';
 import type { Role, User } from '../types';
 
-export const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+const FALLBACK_SESSION_HOURS = 12;
+
+/** Session lifetime follows Settings → Terminals (a 24h venue outlives a mall unit's day). */
+function sessionTtlMs(): number {
+  try {
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'terminals'").get() as
+      | { value: string }
+      | undefined;
+    const hours = row ? (JSON.parse(row.value) as { sessionHours?: number }).sessionHours : undefined;
+    if (Number.isInteger(hours) && (hours as number) >= 1 && (hours as number) <= 48) {
+      return (hours as number) * 60 * 60 * 1000;
+    }
+  } catch {
+    /* fall through to the default */
+  }
+  return FALLBACK_SESSION_HOURS * 60 * 60 * 1000;
+}
 
 const ROLE_RANK: Record<Role, number> = { kitchen: 1, cashier: 2, manager: 3, admin: 4 };
 
@@ -29,7 +45,7 @@ export function createSession(userId: number): string {
   db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(
     token,
     userId,
-    Date.now() + SESSION_TTL_MS,
+    Date.now() + sessionTtlMs(),
   );
   return token;
 }

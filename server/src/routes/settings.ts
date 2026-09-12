@@ -15,6 +15,8 @@ import {
   getGatewaySettings,
   getLogoDataUrl,
   getGuestSettings,
+  getKdsSettings,
+  getTerminalSettings,
   getLoyaltySettings,
   getPaymentsSettings,
   getPlatformsSettings,
@@ -29,6 +31,8 @@ import type {
   EinvoiceSettings,
   GatewaySettings,
   GuestSettings,
+  KdsSettings,
+  TerminalSettings,
   LoyaltySettings,
   PaymentsSettings,
   PlatformsSettings,
@@ -60,6 +64,8 @@ function fullPayload() {
     platforms: getPlatformsSettings(),
     loyalty: getLoyaltySettings(),
     guest: getGuestSettings(),
+    kds: getKdsSettings(),
+    terminals: getTerminalSettings(),
     // Labels computed server-side so screen and thermal receipts always agree.
     receipts: { ...receipts, labels: makeLabels(receipts.langPrimary, receipts.langSecondary) },
     logo: getLogoDataUrl(),
@@ -76,7 +82,7 @@ settingsRouter.get('/', (_req, res) => {
 });
 
 settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
-  const { business, tax, printers, payments, einvoice, gateway, platforms, loyalty, receipts, guest } = req.body as {
+  const { business, tax, printers, payments, einvoice, gateway, platforms, loyalty, receipts, guest, kds, terminals } = req.body as {
     business?: Partial<BusinessSettings>;
     tax?: Partial<TaxSettings>;
     printers?: Partial<PrintersSettings>;
@@ -87,6 +93,8 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
     loyalty?: Partial<LoyaltySettings>;
     receipts?: Partial<ReceiptsSettings>;
     guest?: Partial<GuestSettings>;
+    kds?: Partial<KdsSettings>;
+    terminals?: Partial<TerminalSettings>;
   };
   if (business) {
     const merged = { ...DEFAULT_BUSINESS, ...getBusinessSettings(), ...business };
@@ -211,6 +219,29 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
     }
     merged.orderGuardEnabled = !!merged.orderGuardEnabled;
     setSetting('guest', merged);
+  }
+  if (kds) {
+    const merged: KdsSettings = { ...getKdsSettings(), ...kds };
+    if (
+      !Number.isInteger(merged.warnMinutes) || !Number.isInteger(merged.lateMinutes) ||
+      merged.warnMinutes < 1 || merged.lateMinutes > 120 || merged.warnMinutes >= merged.lateMinutes
+    ) {
+      throw badRequest('Kitchen timing needs whole minutes with warn below late (late at most 120)');
+    }
+    setSetting('kds', merged);
+  }
+  if (terminals) {
+    const merged: TerminalSettings = { ...getTerminalSettings(), ...terminals };
+    if (!Number.isInteger(merged.sessionHours) || merged.sessionHours < 1 || merged.sessionHours > 48) {
+      throw badRequest('Session hours must be a whole number from 1 to 48');
+    }
+    if (
+      !Number.isInteger(merged.idleLockDefaultMinutes) ||
+      merged.idleLockDefaultMinutes < 0 || merged.idleLockDefaultMinutes > 120
+    ) {
+      throw badRequest('Idle lock default must be 0 (off) to 120 minutes');
+    }
+    setSetting('terminals', merged);
   }
   if (receipts) {
     const merged: ReceiptsSettings = { ...DEFAULT_RECEIPTS, ...getReceiptsSettings(), ...receipts };

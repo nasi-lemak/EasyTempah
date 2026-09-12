@@ -5,11 +5,13 @@ import type {
   DemoSettings,
   EinvoiceSettings,
   GatewaySettings,
+  KdsSettings,
   LoyaltySettings,
   PaymentsSettings,
   PlatformsSettings,
   PrintersSettings,
   ReceiptsSettings,
+  TerminalSettings,
   TaxSettings,
 } from './types';
 
@@ -22,6 +24,8 @@ export interface SettingsBundle {
   gateway?: GatewaySettings;
   platforms?: PlatformsSettings;
   loyalty?: LoyaltySettings;
+  kds?: KdsSettings;
+  terminals?: TerminalSettings;
   receipts?: ReceiptsSettings;
   logo?: string;
   demo?: DemoSettings;
@@ -38,6 +42,8 @@ interface AppState {
   gateway: GatewaySettings | null;
   platforms: PlatformsSettings | null;
   loyalty: LoyaltySettings | null;
+  kds: KdsSettings | null;
+  terminals: TerminalSettings | null;
   receipts: ReceiptsSettings | null;
   logo: string;
   demo: DemoSettings | null;
@@ -71,6 +77,8 @@ export const useStore = create<AppState>((set) => ({
   gateway: null,
   platforms: null,
   loyalty: null,
+  kds: null,
+  terminals: null,
   receipts: null,
   logo: '',
   demo: null,
@@ -94,6 +102,8 @@ export const useStore = create<AppState>((set) => ({
       ...(bundle.gateway ? { gateway: bundle.gateway } : {}),
       ...(bundle.platforms ? { platforms: bundle.platforms } : {}),
       ...(bundle.loyalty ? { loyalty: bundle.loyalty } : {}),
+      ...(bundle.kds ? { kds: bundle.kds } : {}),
+      ...(bundle.terminals ? { terminals: bundle.terminals } : {}),
       ...(bundle.receipts ? { receipts: bundle.receipts } : {}),
       ...(bundle.logo !== undefined ? { logo: bundle.logo } : {}),
       ...(bundle.demo ? { demo: bundle.demo } : {}),

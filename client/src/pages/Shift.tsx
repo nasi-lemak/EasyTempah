@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import Modal from '../components/Modal';
-import { useMoney } from '../store';
+import { useMoney, useStore } from '../store';
 import { formatDateTime } from '../time';
 import type { Shift, ShiftSummary } from '../types';
 import { useEvents } from '../useEvents';
@@ -259,14 +259,27 @@ export default function ShiftPage() {
 }
 
 /** Count the drawer note by note; the sum lands in the counted-cash field. */
-function DenominationCounter({ onTotal }: { onTotal: (cents: number) => void }) {
-  const DENOMS = [
+/** Cash denominations follow the venue's country so the count sheet matches the drawer. */
+const DENOMS_BY_COUNTRY: Record<string, { label: string; cents: number }[]> = {
+  MY: [
     { label: 'RM100', cents: 10000 }, { label: 'RM50', cents: 5000 },
     { label: 'RM20', cents: 2000 }, { label: 'RM10', cents: 1000 },
     { label: 'RM5', cents: 500 }, { label: 'RM1', cents: 100 },
     { label: '50¢', cents: 50 }, { label: '20¢', cents: 20 },
     { label: '10¢', cents: 10 }, { label: '5¢', cents: 5 },
-  ];
+  ],
+  SG: [
+    { label: 'S$100', cents: 10000 }, { label: 'S$50', cents: 5000 },
+    { label: 'S$10', cents: 1000 }, { label: 'S$5', cents: 500 },
+    { label: 'S$2', cents: 200 }, { label: 'S$1', cents: 100 },
+    { label: '50¢', cents: 50 }, { label: '20¢', cents: 20 },
+    { label: '10¢', cents: 10 }, { label: '5¢', cents: 5 },
+  ],
+};
+
+function DenominationCounter({ onTotal }: { onTotal: (cents: number) => void }) {
+  const country = useStore((s) => s.business?.country) ?? 'MY';
+  const DENOMS = DENOMS_BY_COUNTRY[country] ?? DENOMS_BY_COUNTRY.MY;
   const [counts, setCounts] = useState<Record<string, string>>({});
   const total = DENOMS.reduce((s, d) => s + d.cents * (parseInt(counts[d.label] || '0', 10) || 0), 0);
   return (

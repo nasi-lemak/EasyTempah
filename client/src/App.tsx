@@ -51,12 +51,18 @@ const THEME_NEXT: Record<ThemePref, ThemePref> = { dark: 'light', light: 'system
 const LOCK_KEY = 'easytempah.autolock';
 const LOCK_STEPS = [0, 2, 5, 15]; // minutes; 0 = off
 
-function getLockMinutes(): number {
+/**
+ * Idle-lock minutes for this terminal: an explicit per-device choice wins;
+ * otherwise the venue-wide default from Settings → Terminals applies.
+ */
+function getLockMinutes(venueDefault = 0): number {
   try {
-    const v = parseFloat(localStorage.getItem(LOCK_KEY) ?? '0');
+    const raw = localStorage.getItem(LOCK_KEY);
+    if (raw === null) return venueDefault;
+    const v = parseFloat(raw);
     return Number.isFinite(v) && v > 0 ? v : 0;
   } catch {
-    return 0;
+    return venueDefault;
   }
 }
 
@@ -67,12 +73,13 @@ function getLockMinutes(): number {
 function useIdleLock() {
   const user = useStore((s) => s.user);
   const clearAuth = useStore((s) => s.clearAuth);
+  const venueDefault = useStore((s) => s.terminals?.idleLockDefaultMinutes ?? 0);
   useEffect(() => {
     if (!user || user.role === 'kitchen') return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const arm = () => {
       clearTimeout(timer);
-      const mins = getLockMinutes();
+      const mins = getLockMinutes(venueDefault);
       if (mins > 0) timer = setTimeout(() => clearAuth(), mins * 60_000);
     };
     const events = ['pointerdown', 'keydown', 'touchstart'] as const;
@@ -82,7 +89,7 @@ function useIdleLock() {
       clearTimeout(timer);
       for (const e of events) window.removeEventListener(e, arm);
     };
-  }, [user, clearAuth]);
+  }, [user, clearAuth, venueDefault]);
 }
 
 function Sidebar() {
@@ -91,7 +98,19 @@ function Sidebar() {
   const clearAuth = useStore((s) => s.clearAuth);
   const navigate = useNavigate();
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
-  const [lockMins, setLockMins] = useState(getLockMinutes);
+  const venueLockDefault = useStore((s) => s.terminals?.idleLockDefaultMinutes ?? 0);
+  // null = this device never chose, so the venue-wide default applies.
+  const [lockMins, setLockMins] = useState<number | null>(() => {
+    try {
+      const raw = localStorage.getItem(LOCK_KEY);
+      if (raw === null) return null;
+      const v = parseFloat(raw);
+      return Number.isFinite(v) && v > 0 ? v : 0;
+    } catch {
+      return null;
+    }
+  });
+  const effectiveLock = lockMins ?? venueLockDefault;
 
   const cycleTheme = () => {
     const next = THEME_NEXT[theme];
@@ -100,7 +119,7 @@ function Sidebar() {
   };
 
   const cycleLock = () => {
-    const next = LOCK_STEPS[(LOCK_STEPS.indexOf(lockMins) + 1) % LOCK_STEPS.length] ?? 0;
+    const next = LOCK_STEPS[(LOCK_STEPS.indexOf(effectiveLock) + 1) % LOCK_STEPS.length] ?? 0;
     try {
       localStorage.setItem(LOCK_KEY, String(next));
     } catch { /* per-device convenience */ }
@@ -148,7 +167,7 @@ function Sidebar() {
       </button>
       {user?.role !== 'kitchen' && (
         <button onClick={cycleLock} title="Return this terminal to the PIN screen after idle time">
-          🔒 {lockMins === 0 ? 'Lock off' : `Lock ${lockMins}m`}
+          🔒 {effectiveLock === 0 ? 'Lock off' : `Lock ${effectiveLock}m`}
         </button>
       )}
       <button onClick={logout}>Sign out</button>
