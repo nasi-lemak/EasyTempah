@@ -44,10 +44,11 @@ interface RecentLine extends KdsLine {
 
 export default function Kds() {
   const kdsSettings = useStore((st) => st.kds);
+  const stationDefs = useStore((st) => st.stations?.list) ?? [{ key: 'kitchen', label: 'Kitchen' }, { key: 'bar', label: 'Bar' }];
   const warnMins = kdsSettings?.warnMinutes ?? 8;
   const lateMins = kdsSettings?.lateMinutes ?? 15;
   const [tickets, setTickets] = useState<KdsTicket[]>([]);
-  const [station, setStation] = useState<Station | 'all'>('all');
+  const [station, setStation] = useState<string>('all');
   const [showRecall, setShowRecall] = useState(false);
   const [showAllDay, setShowAllDay] = useState(false);
   const [recent, setRecent] = useState<RecentLine[]>([]);
@@ -101,9 +102,9 @@ export default function Kds() {
     <div>
       <div className="row mb">
         <h1 className="grow">Kitchen Display</h1>
-        {(['all', 'kitchen', 'bar'] as const).map((s) => (
-          <button key={s} className={station === s ? 'primary' : ''} onClick={() => setStation(s)}>
-            {s === 'all' ? 'All stations' : s[0].toUpperCase() + s.slice(1)}
+        {[{ key: 'all', label: 'All stations' }, ...stationDefs].map((st) => (
+          <button key={st.key} className={station === st.key ? 'primary' : ''} onClick={() => setStation(st.key)}>
+            {st.label}
           </button>
         ))}
         <button className={showAllDay ? 'primary' : ''} onClick={() => setShowAllDay(!showAllDay)}>

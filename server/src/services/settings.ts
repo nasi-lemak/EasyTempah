@@ -9,8 +9,10 @@ import type {
   LoyaltySettings,
   PaymentsSettings,
   PlatformsSettings,
+  PrinterTarget,
   PrintersSettings,
   ReceiptsSettings,
+  StationsSettings,
   TaxSettings,
 } from '../types';
 
@@ -65,9 +67,18 @@ export function getTaxSettings(): TaxSettings {
 
 export const DEFAULT_PRINTERS: PrintersSettings = {
   receipt: { enabled: false, host: '192.168.0.100', port: 9100, drawerKick: true, charset: 'ascii' },
-  kitchen: { enabled: false, host: '192.168.0.101', port: 9100, charset: 'ascii' },
-  bar: { enabled: false, host: '192.168.0.102', port: 9100, charset: 'ascii' },
+  stations: {
+    kitchen: { enabled: false, host: '192.168.0.101', port: 9100, charset: 'ascii' },
+    bar: { enabled: false, host: '192.168.0.102', port: 9100, charset: 'ascii' },
+  },
 };
+
+const DEFAULT_STATION_PRINTER: PrinterTarget = { enabled: false, host: '', port: 9100, charset: 'ascii' };
+
+/** A station's printer target — a sane disabled default when none is configured yet. */
+export function stationPrinter(printers: PrintersSettings, key: string): PrinterTarget {
+  return { ...DEFAULT_STATION_PRINTER, ...printers.stations[key] };
+}
 
 export const DEFAULT_RECEIPTS: ReceiptsSettings = {
   langPrimary: 'en',
@@ -184,6 +195,24 @@ export function getKdsSettings(): KdsSettings {
   return { ...DEFAULT_KDS, ...getSetting('kds', DEFAULT_KDS) };
 }
 
+export const DEFAULT_STATIONS: StationsSettings = {
+  list: [
+    { key: 'kitchen', label: 'Kitchen' },
+    { key: 'bar', label: 'Bar' },
+  ],
+};
+
+export function getStationsSettings(): StationsSettings {
+  const stored = getSetting('stations', DEFAULT_STATIONS);
+  if (!Array.isArray(stored.list) || stored.list.length === 0) return DEFAULT_STATIONS;
+  return stored;
+}
+
+/** The configured station keys; the first is the default for new items. */
+export function stationKeys(): string[] {
+  return getStationsSettings().list.map((s) => s.key);
+}
+
 export const DEFAULT_TERMINALS: TerminalSettings = {
   sessionHours: 12,
   idleLockDefaultMinutes: 0,
@@ -215,11 +244,25 @@ export function getDemoSettings(): DemoSettings {
 }
 
 export function getPrintersSettings(): PrintersSettings {
-  const stored = getSetting('printers', DEFAULT_PRINTERS);
-  // Deep-merge per printer so partial saves keep sane defaults.
+  // Raw stored value (empty fallback, no default merge) so the legacy
+  // pre-stations shape — kitchen/bar at the top level — is still visible.
+  const stored = getSetting<Partial<PrintersSettings> & { kitchen?: PrinterTarget; bar?: PrinterTarget }>(
+    'printers',
+    {},
+  );
+  const stations: Record<string, PrinterTarget> = stored.stations
+    ? { ...stored.stations }
+    : stored.kitchen || stored.bar
+      ? {
+          ...(stored.kitchen ? { kitchen: stored.kitchen } : {}),
+          ...(stored.bar ? { bar: stored.bar } : {}),
+        }
+      : { ...DEFAULT_PRINTERS.stations };
+  for (const key of Object.keys(stations)) {
+    stations[key] = { ...DEFAULT_STATION_PRINTER, ...stations[key] };
+  }
   return {
     receipt: { ...DEFAULT_PRINTERS.receipt, ...stored.receipt },
-    kitchen: { ...DEFAULT_PRINTERS.kitchen, ...stored.kitchen },
-    bar: { ...DEFAULT_PRINTERS.bar, ...stored.bar },
+    stations,
   };
 }

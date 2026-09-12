@@ -11,10 +11,12 @@ import type {
   LoyaltySettings,
   PaymentsSettings,
   PlatformsSettings,
+  PrinterTarget,
   PrintersSettings,
   ReceiptsSettings,
   TaxSettings,
   TerminalSettings,
+  StationsSettings,
 } from '../types';
 
 type SettingsPayload = {
@@ -29,6 +31,7 @@ type SettingsPayload = {
   guest: GuestSettings;
   kds: KdsSettings;
   terminals: TerminalSettings;
+  stations: StationsSettings;
   receipts: ReceiptsSettings;
   logo: string;
 };
@@ -50,6 +53,7 @@ export default function SettingsPage() {
   const [guest, setGuest] = useState<GuestSettings | null>(null);
   const [kds, setKds] = useState<KdsSettings | null>(null);
   const [terminals, setTerminals] = useState<TerminalSettings | null>(null);
+  const [stationsCfg, setStationsCfg] = useState<StationsSettings | null>(null);
   const [receipts, setReceipts] = useState<ReceiptsSettings | null>(null);
   const [logo, setLogo] = useState('');
   const [saved, setSaved] = useState(false);
@@ -83,13 +87,14 @@ export default function SettingsPage() {
         setGuest(r.guest);
         setKds(r.kds);
         setTerminals(r.terminals);
+        setStationsCfg(r.stations);
         setReceipts(r.receipts);
         setLogo(r.logo ?? '');
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, []);
 
-  if (!business || !tax || !printers || !payments || !einvoice || !gateway || !platforms || !loyalty || !guest || !kds || !terminals || !receipts) {
+  if (!business || !tax || !printers || !payments || !einvoice || !gateway || !platforms || !loyalty || !guest || !kds || !terminals || !stationsCfg || !receipts) {
     return <div className="muted">Loading…</div>;
   }
 
@@ -109,6 +114,7 @@ export default function SettingsPage() {
         guest,
         kds,
         terminals,
+        stations: stationsCfg,
         receipts,
       });
       setBusiness(r.business);
@@ -122,6 +128,7 @@ export default function SettingsPage() {
       setGuest(r.guest);
       setKds(r.kds);
       setTerminals(r.terminals);
+      setStationsCfg(r.stations);
       setReceipts(r.receipts);
       setLogo(r.logo ?? '');
       setEinvoiceSecret('');
@@ -134,7 +141,7 @@ export default function SettingsPage() {
     }
   };
 
-  const test = async (which: 'receipt' | 'kitchen' | 'bar') => {
+  const test = async (which: string) => {
     setTestMsg('');
     setError('');
     try {
@@ -145,30 +152,41 @@ export default function SettingsPage() {
     }
   };
 
-  const printerRow = (key: 'receipt' | 'kitchen' | 'bar', label: string) => {
-    const t = printers[key];
-    const patch = (p: Partial<typeof t>) => setPrinters({ ...printers, [key]: { ...t, ...p } });
-    return (
-      <div className="row wrap mb" key={key}>
-        <button className={t.enabled ? 'primary' : ''} style={{ minWidth: 110 }}
-          onClick={() => patch({ enabled: !t.enabled })}>
-          {label} {t.enabled ? 'ON' : 'off'}
+  const printerTargetRow = (
+    key: string,
+    label: string,
+    t: PrinterTarget & { drawerKick?: boolean },
+    patch: (p: Partial<PrinterTarget & { drawerKick: boolean }>) => void,
+    isReceipt: boolean,
+  ) => (
+    <div className="row wrap mb" key={key}>
+      <button className={t.enabled ? 'primary' : ''} style={{ minWidth: 110 }}
+        onClick={() => patch({ enabled: !t.enabled })}>
+        {label} {t.enabled ? 'ON' : 'off'}
+      </button>
+      <input value={t.host} onChange={(e) => patch({ host: e.target.value })} placeholder="IP address" style={{ width: 150 }} />
+      <input type="number" value={t.port} onChange={(e) => patch({ port: Number(e.target.value) })} style={{ width: 90 }} />
+      <select value={t.charset ?? 'ascii'} onChange={(e) => patch({ charset: e.target.value as 'ascii' | 'gbk' })} title="Character set: GBK for printers with Chinese firmware">
+        <option value="ascii">ASCII</option>
+        <option value="gbk">GBK 中文</option>
+      </select>
+      {isReceipt && (
+        <button className={t.drawerKick ? 'primary' : ''} onClick={() => patch({ drawerKick: !t.drawerKick })}>
+          Drawer kick
         </button>
-        <input value={t.host} onChange={(e) => patch({ host: e.target.value })} placeholder="IP address" style={{ width: 150 }} />
-        <input type="number" value={t.port} onChange={(e) => patch({ port: Number(e.target.value) })} style={{ width: 90 }} />
-        <select value={t.charset ?? 'ascii'} onChange={(e) => patch({ charset: e.target.value as 'ascii' | 'gbk' })} title="Character set: GBK for printers with Chinese firmware">
-          <option value="ascii">ASCII</option>
-          <option value="gbk">GBK 中文</option>
-        </select>
-        {key === 'receipt' && (
-          <button className={printers.receipt.drawerKick ? 'primary' : ''}
-            onClick={() => setPrinters({ ...printers, receipt: { ...printers.receipt, drawerKick: !printers.receipt.drawerKick } })}>
-            Drawer kick
-          </button>
-        )}
-        <button onClick={() => test(key)} disabled={!t.enabled}>Test</button>
-      </div>
-    );
+      )}
+      <button onClick={() => test(key)} disabled={!t.enabled}>Test</button>
+    </div>
+  );
+
+  const receiptRow = () =>
+    printerTargetRow('receipt', 'Receipt', printers.receipt,
+      (p) => setPrinters({ ...printers, receipt: { ...printers.receipt, ...p } }), true);
+
+  const stationRow = (key: string, label: string) => {
+    const t = printers.stations[key] ?? { enabled: false, host: '', port: 9100, charset: 'ascii' as const };
+    return printerTargetRow(key, label, t,
+      (p) => setPrinters({ ...printers, stations: { ...printers.stations, [key]: { ...t, ...p } } }), false);
   };
 
   const bField = (key: keyof BusinessSettings, label: string) => (
@@ -569,6 +587,56 @@ export default function SettingsPage() {
       </div>
 
       <div className="panel mb">
+        <h2>Prep stations</h2>
+        {stationsCfg.list.map((st, i) => (
+          <div className="row mb" key={i}>
+            <input
+              value={st.key}
+              placeholder="key (e.g. wok)"
+              style={{ width: 130 }}
+              className="mono"
+              onChange={(e) => {
+                const list = [...stationsCfg.list];
+                list[i] = { ...st, key: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 20) };
+                setStationsCfg({ list });
+              }}
+            />
+            <input
+              value={st.label}
+              placeholder="Label shown to staff"
+              className="grow"
+              onChange={(e) => {
+                const list = [...stationsCfg.list];
+                list[i] = { ...st, label: e.target.value };
+                setStationsCfg({ list });
+              }}
+            />
+            <button
+              className="ghost"
+              style={{ color: 'var(--danger)' }}
+              disabled={stationsCfg.list.length <= 1}
+              onClick={() => setStationsCfg({ list: stationsCfg.list.filter((_, j) => j !== i) })}
+              aria-label={`Remove station ${st.label}`}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          disabled={stationsCfg.list.length >= 8}
+          onClick={() => setStationsCfg({ list: [...stationsCfg.list, { key: '', label: '' }] })}
+        >
+          + Add station
+        </button>
+        <div className="muted small mt">
+          One screen filter, one ticket printer and one menu-item home per station — wok, roti,
+          drinks, dessert, whatever your line looks like. Renaming a key is a new station: move
+          its menu items first, since a station with active items can't be removed. Each station's
+          printer is set below.
+        </div>
+      </div>
+
+      <div className="panel mb">
         <h2>Delivery platforms</h2>
         <p className="muted small">
           For orders re-keyed from GrabFood/foodpanda/ShopeeFood merchant tablets. Platform orders
@@ -702,9 +770,8 @@ export default function SettingsPage() {
           Kitchen and bar tickets print automatically when orders are sent (including QR guest
           orders); receipts print from the payment screen. Save before testing.
         </p>
-        {printerRow('receipt', 'Receipt')}
-        {printerRow('kitchen', 'Kitchen')}
-        {printerRow('bar', 'Bar')}
+        {receiptRow()}
+        {stationsCfg.list.map((st) => stationRow(st.key, st.label))}
         {testMsg && <div style={{ color: 'var(--accent)' }}>{testMsg}</div>}
       </div>
 

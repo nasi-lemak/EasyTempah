@@ -17,7 +17,7 @@ import {
   getBusinessSettings,
   getEinvoiceSettings,
   getLogoDataUrl,
-  getPrintersSettings,
+  getPrintersSettings, getStationsSettings, stationPrinter,
   getReceiptsSettings,
   getTaxSettings,
 } from './settings';
@@ -83,8 +83,8 @@ export async function printKitchenTickets(orderId: number, lineIds: number[]): P
   if (lineIds.length === 0) return;
   try {
     const printers = getPrintersSettings();
-    const stations: Station[] = ['kitchen', 'bar'];
-    if (!stations.some((s) => printers[s].enabled)) return;
+    const stationDefs = getStationsSettings().list;
+    if (!stationDefs.some((st) => stationPrinter(printers, st.key).enabled)) return;
 
     const order = getOrder(orderId);
     // A set meal prints its components, not the bundle parent line.
@@ -93,8 +93,9 @@ export async function printKitchenTickets(orderId: number, lineIds: number[]): P
     const where =
       order.type === 'dine_in' ? `Table ${order.table_name ?? ''}` : order.type.replace('_', ' ');
 
-    for (const station of stations) {
-      if (!printers[station].enabled) continue;
+    for (const { key: station, label } of stationDefs) {
+      const target = stationPrinter(printers, station);
+      if (!target.enabled) continue;
       const lines: TicketLine[] = order.items
         .filter((l) => idSet.has(l.id) && l.station === station)
         .map((l) => ({
@@ -106,15 +107,15 @@ export async function printKitchenTickets(orderId: number, lineIds: number[]): P
         }));
       if (!lines.length) continue;
       const doc = renderKitchenTicket({
-        station,
+        station: label,
         order_no: order.order_no,
         where,
         order_notes: order.notes,
         pager_no: order.pager_no,
         lines,
-        charset: printers[station].charset ?? 'ascii',
+        charset: target.charset ?? 'ascii',
       });
-      await sendToPrinter(printers[station], doc);
+      await sendToPrinter(target, doc);
     }
   } catch (err) {
     console.error(`Kitchen ticket print failed for order ${orderId}:`, err instanceof Error ? err.message : err);
@@ -136,9 +137,9 @@ export async function printShiftReport(shiftId: number): Promise<void> {
   await sendToPrinter(printers.receipt, doc);
 }
 
-export async function testPrint(which: 'receipt' | 'kitchen' | 'bar'): Promise<void> {
+export async function testPrint(which: string): Promise<void> {
   const printers = getPrintersSettings();
-  const target = printers[which];
+  const target = which === 'receipt' ? printers.receipt : stationPrinter(printers, which);
   if (!target.enabled) throw new ApiError(409, `${which} printer is not enabled`);
   const business = getBusinessSettings();
   const doc = new EscPos()

@@ -511,6 +511,56 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE orders ADD COLUMN pager_no INTEGER;
   `,
+  // v20 — venue-defined kitchen stations: station becomes a free key validated
+  // against Settings → Stations instead of a hardcoded kitchen|bar CHECK.
+  // SQLite can't drop a CHECK, so both tables rebuild (applySchema turns
+  // foreign_keys off around migrations and runs foreign_key_check after).
+  `
+  CREATE TABLE items_v20 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id INTEGER NOT NULL REFERENCES categories(id),
+    name TEXT NOT NULL,
+    price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
+    sku TEXT,
+    station TEXT NOT NULL DEFAULT 'kitchen',
+    active INTEGER NOT NULL DEFAULT 1,
+    track_stock INTEGER NOT NULL DEFAULT 0,
+    stock_qty INTEGER NOT NULL DEFAULT 0,
+    low_stock_threshold INTEGER NOT NULL DEFAULT 5,
+    sort INTEGER NOT NULL DEFAULT 0,
+    is_combo INTEGER NOT NULL DEFAULT 0
+  );
+  INSERT INTO items_v20 (id, category_id, name, price_cents, sku, station, active, track_stock, stock_qty, low_stock_threshold, sort, is_combo)
+    SELECT id, category_id, name, price_cents, sku, station, active, track_stock, stock_qty, low_stock_threshold, sort, is_combo FROM items;
+  DROP TABLE items;
+  ALTER TABLE items_v20 RENAME TO items;
+
+  CREATE TABLE order_items_v20 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    item_id INTEGER REFERENCES items(id),
+    name TEXT NOT NULL,
+    qty INTEGER NOT NULL CHECK (qty > 0),
+    unit_price_cents INTEGER NOT NULL,
+    modifiers_json TEXT NOT NULL DEFAULT '[]',
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'pending'
+      CHECK (status IN ('pending','sent','preparing','ready','served','cancelled')),
+    station TEXT NOT NULL DEFAULT 'kitchen',
+    line_total_cents INTEGER NOT NULL DEFAULT 0,
+    sent_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    source TEXT NOT NULL DEFAULT 'staff' CHECK (source IN ('staff','guest')),
+    parent_line_id INTEGER REFERENCES order_items(id)
+  );
+  INSERT INTO order_items_v20 (id, order_id, item_id, name, qty, unit_price_cents, modifiers_json, notes, status, station, line_total_cents, sent_at, created_at, source, parent_line_id)
+    SELECT id, order_id, item_id, name, qty, unit_price_cents, modifiers_json, notes, status, station, line_total_cents, sent_at, created_at, source, parent_line_id FROM order_items;
+  DROP TABLE order_items;
+  ALTER TABLE order_items_v20 RENAME TO order_items;
+  CREATE INDEX idx_order_items_order ON order_items(order_id);
+  CREATE INDEX idx_order_items_status ON order_items(status);
+  CREATE INDEX idx_order_items_parent ON order_items(parent_line_id);
+  `,
 ];
 
 export function applySchema(db: Database): void {

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { stationKeys } from '../services/settings';
 import { db } from '../db/connection';
 import { AuthedRequest, requireAuth, requireRole } from '../middleware/auth';
 import { badRequest, notFound } from '../middleware/errors';
@@ -219,7 +220,7 @@ menuRouter.post('/items', requireRole('manager'), (req: AuthedRequest, res) => {
       b.name.trim(),
       b.price_cents,
       b.sku ?? null,
-      b.station === 'bar' ? 'bar' : 'kitchen',
+      stationKeys().includes(b.station ?? '') ? b.station : stationKeys()[0],
       b.track_stock ? 1 : 0,
       b.stock_qty ?? 0,
       b.low_stock_threshold ?? 5,
@@ -248,7 +249,7 @@ menuRouter.patch('/items/:id', requireRole('manager'), (req, res) => {
     b.name?.trim() || item.name,
     b.price_cents ?? item.price_cents,
     b.sku !== undefined ? b.sku : item.sku,
-    b.station ?? item.station,
+    b.station !== undefined && stationKeys().includes(b.station) ? b.station : item.station,
     b.active !== undefined ? (b.active ? 1 : 0) : item.active,
     b.track_stock !== undefined ? (b.track_stock ? 1 : 0) : item.track_stock,
     b.low_stock_threshold ?? item.low_stock_threshold,

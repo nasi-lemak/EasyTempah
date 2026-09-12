@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { db } from '../db/connection';
 import { AuthedRequest, requireAuth, requireRole } from '../middleware/auth';
 import { badRequest } from '../middleware/errors';
 import { audit } from '../services/audit';
@@ -17,6 +18,8 @@ import {
   getGuestSettings,
   getKdsSettings,
   getTerminalSettings,
+  getStationsSettings,
+  stationKeys,
   getLoyaltySettings,
   getPaymentsSettings,
   getPlatformsSettings,
@@ -33,6 +36,7 @@ import type {
   GuestSettings,
   KdsSettings,
   TerminalSettings,
+  StationsSettings,
   LoyaltySettings,
   PaymentsSettings,
   PlatformsSettings,
@@ -66,6 +70,7 @@ function fullPayload() {
     guest: getGuestSettings(),
     kds: getKdsSettings(),
     terminals: getTerminalSettings(),
+    stations: getStationsSettings(),
     // Labels computed server-side so screen and thermal receipts always agree.
     receipts: { ...receipts, labels: makeLabels(receipts.langPrimary, receipts.langSecondary) },
     logo: getLogoDataUrl(),
@@ -82,7 +87,7 @@ settingsRouter.get('/', (_req, res) => {
 });
 
 settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
-  const { business, tax, printers, payments, einvoice, gateway, platforms, loyalty, receipts, guest, kds, terminals } = req.body as {
+  const { business, tax, printers, payments, einvoice, gateway, platforms, loyalty, receipts, guest, kds, terminals, stations } = req.body as {
     business?: Partial<BusinessSettings>;
     tax?: Partial<TaxSettings>;
     printers?: Partial<PrintersSettings>;
@@ -95,6 +100,7 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
     guest?: Partial<GuestSettings>;
     kds?: Partial<KdsSettings>;
     terminals?: Partial<TerminalSettings>;
+    stations?: StationsSettings;
   };
   if (business) {
     const merged = { ...DEFAULT_BUSINESS, ...getBusinessSettings(), ...business };
@@ -122,12 +128,12 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
   }
   if (printers) {
     const current = getPrintersSettings();
+    const stationTargets = { ...current.stations, ...(printers.stations ?? {}) };
     const merged: PrintersSettings = {
       receipt: { ...current.receipt, ...printers.receipt },
-      kitchen: { ...current.kitchen, ...printers.kitchen },
-      bar: { ...current.bar, ...printers.bar },
+      stations: stationTargets,
     };
-    for (const target of [merged.receipt, merged.kitchen, merged.bar]) {
+    for (const target of [merged.receipt, ...Object.values(merged.stations)]) {
       if (!Number.isInteger(target.port) || target.port < 1 || target.port > 65535) {
         throw badRequest('Printer port must be 1-65535');
       }
@@ -137,6 +143,34 @@ settingsRouter.put('/', requireRole('admin'), (req: AuthedRequest, res) => {
       }
     }
     setSetting('printers', merged);
+  }
+  if (stations) {
+    const list = stations.list;
+    if (!Array.isArray(list) || list.length < 1 || list.length > 8) {
+      throw badRequest('Between 1 and 8 stations, please');
+    }
+    const seen = new Set<string>();
+    for (const st of list) {
+      if (typeof st.key !== 'string' || !/^[a-z0-9_-]{1,20}$/.test(st.key)) {
+        throw badRequest('Station keys are 1-20 lowercase letters, digits, - or _');
+      }
+      if (typeof st.label !== 'string' || !st.label.trim() || st.label.length > 30) {
+        throw badRequest('Every station needs a label up to 30 characters');
+      }
+      if (seen.has(st.key)) throw badRequest(`Duplicate station key "${st.key}"`);
+      seen.add(st.key);
+    }
+    // A station still cooking someone's menu can't be removed — reassign items first.
+    const removed = stationKeys().filter((k) => !seen.has(k));
+    for (const key of removed) {
+      const inUse = db
+        .prepare('SELECT COUNT(*) AS n FROM items WHERE station = ? AND active = 1')
+        .get(key) as { n: number };
+      if (inUse.n > 0) {
+        throw badRequest(`Station "${key}" still has ${inUse.n} active menu item(s) — move them to another station first`);
+      }
+    }
+    setSetting('stations', { list: list.map((st) => ({ key: st.key, label: st.label.trim() })) });
   }
   if (payments) {
     const current = getPaymentsSettings();

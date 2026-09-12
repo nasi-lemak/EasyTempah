@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { stationKeys } from '../services/settings';
 import { AuthedRequest, requireAuth, requireRole } from '../middleware/auth';
 import { badRequest } from '../middleware/errors';
 import { audit } from '../services/audit';
@@ -45,7 +46,7 @@ printRouter.post('/shift/:shiftId', (req: AuthedRequest, res, next) => {
 
 printRouter.post('/test/:which', requireRole('manager'), (req, res, next) => {
   const which = req.params.which;
-  if (which !== 'receipt' && which !== 'kitchen' && which !== 'bar') throw badRequest('Unknown printer');
+  if (which !== 'receipt' && !stationKeys().includes(which)) throw badRequest('Unknown printer');
   testPrint(which)
     .then(() => res.json({ ok: true }))
     .catch(next);

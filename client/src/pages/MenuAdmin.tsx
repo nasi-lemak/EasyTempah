@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import Modal from '../components/Modal';
 import { itemImageUrl, prepareItemPhoto } from '../images';
-import { useMoney } from '../store';
+import { useMoney, useStore } from '../store';
 import type {
   Category,
   ComboGroup,
@@ -101,13 +101,14 @@ const emptyItemForm = {
   name: '',
   category_id: 0,
   price: '',
-  station: 'kitchen' as 'kitchen' | 'bar',
+  station: 'kitchen' as string,
   active: true,
   modifier_group_ids: [] as number[],
 };
 
 export default function MenuAdmin() {
   const money = useMoney();
+  const stationDefs = useStore((s) => s.stations?.list) ?? [{ key: 'kitchen', label: 'Kitchen' }, { key: 'bar', label: 'Bar' }];
   const [menu, setMenu] = useState<AdminMenu | null>(null);
   const [tab, setTab] = useState<'items' | 'categories' | 'modifiers' | 'promos'>('items');
   const [itemForm, setItemForm] = useState<typeof emptyItemForm | null>(null);
@@ -397,8 +398,9 @@ export default function MenuAdmin() {
           </div>
           <label>Station</label>
           <div className="row mb">
-            <button className={itemForm.station === 'kitchen' ? 'primary' : ''} onClick={() => setItemForm({ ...itemForm, station: 'kitchen' })}>Kitchen</button>
-            <button className={itemForm.station === 'bar' ? 'primary' : ''} onClick={() => setItemForm({ ...itemForm, station: 'bar' })}>Bar</button>
+            {stationDefs.map((st) => (
+              <button key={st.key} className={itemForm.station === st.key ? 'primary' : ''} onClick={() => setItemForm({ ...itemForm, station: st.key })}>{st.label}</button>
+            ))}
             <div className="grow" />
             <button className={itemForm.active ? 'primary' : 'danger'} onClick={() => setItemForm({ ...itemForm, active: !itemForm.active })}>
               {itemForm.active ? 'Active' : 'Inactive'}

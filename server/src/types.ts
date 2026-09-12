@@ -4,7 +4,17 @@ export type OrderType = 'dine_in' | 'takeaway' | 'delivery';
 export type OrderStatus = 'open' | 'paid' | 'void';
 export type OrderItemStatus = 'pending' | 'sent' | 'preparing' | 'ready' | 'served' | 'cancelled';
 export type PaymentMethod = 'cash' | 'card' | 'ewallet' | 'other';
-export type Station = 'kitchen' | 'bar';
+/** A prep-station key, validated against Settings → Stations (e.g. kitchen, bar, wok, roti). */
+export type Station = string;
+
+export interface StationDef {
+  key: string;
+  label: string;
+}
+
+export interface StationsSettings {
+  list: StationDef[];
+}
 
 export interface User {
   id: number;
@@ -394,8 +404,8 @@ export interface PrinterTarget {
 
 export interface PrintersSettings {
   receipt: PrinterTarget & { drawerKick: boolean };
-  kitchen: PrinterTarget;
-  bar: PrinterTarget;
+  /** One optional printer per configured station, keyed by station key. */
+  stations: Record<string, PrinterTarget>;
 }
 
 export interface BusinessSettings {

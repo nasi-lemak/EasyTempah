@@ -11,9 +11,17 @@ fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 export const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
 
+// Migrations may rebuild tables (SQLite can't alter CHECK constraints), so
+// they run with foreign keys off, verified whole afterwards — the standard
+// SQLite migration procedure.
+db.pragma('foreign_keys = OFF');
 applySchema(db);
+const fkViolations = db.pragma('foreign_key_check') as unknown[];
+if (fkViolations.length > 0) {
+  throw new Error(`Migration left ${fkViolations.length} foreign-key violation(s): ${JSON.stringify(fkViolations[0])}`);
+}
+db.pragma('foreign_keys = ON');
 
 // Every table gets a QR ordering token; backfill any that predate migration v4.
 {

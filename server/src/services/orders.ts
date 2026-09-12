@@ -18,6 +18,7 @@ import { cashRoundingAdjustment, computeTotals } from './orderMath';
 import { bestPromo } from './promotions';
 import {
   getLoyaltySettings,
+  stationKeys,
   getPlatformsSettings,
   getReceiptsSettings,
   getSetting,
@@ -189,7 +190,7 @@ export interface AddLineInput {
   /** For combo items: one chosen component per choice group. */
   combo_choices?: { group_id: number; item_id: number }[];
   /** Off-menu line (staff only): "special of the day, RM8". No stock/recipe ties. */
-  custom?: { name: string; price_cents: number; station?: 'kitchen' | 'bar' };
+  custom?: { name: string; price_cents: number; station?: string };
   notes?: string | null;
 }
 
@@ -227,7 +228,8 @@ function insertLines(orderId: number, lines: AddLineInput[], opts: InsertOpts): 
       if (!Number.isInteger(price) || price < 0 || price > 1_000_000) {
         throw badRequest('Open item price must be 0 – 10,000.00');
       }
-      const station = line.custom.station === 'bar' ? 'bar' : 'kitchen';
+      const keys = stationKeys();
+      const station = keys.includes(line.custom.station ?? '') ? (line.custom.station as string) : keys[0];
       const info = db.prepare(
         `INSERT INTO order_items (order_id, item_id, name, qty, unit_price_cents, modifiers_json, notes,
            station, line_total_cents, source, status, sent_at)

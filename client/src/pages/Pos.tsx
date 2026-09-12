@@ -669,12 +669,13 @@ function OpenItemDialog({
   onAdd,
   onClose,
 }: {
-  onAdd: (custom: { name: string; price_cents: number; station: 'kitchen' | 'bar' }, qty: number) => void;
+  onAdd: (custom: { name: string; price_cents: number; station: string }, qty: number) => void;
   onClose: () => void;
 }) {
+  const stationDefs = useStore((s) => s.stations?.list) ?? [{ key: 'kitchen', label: 'Kitchen' }, { key: 'bar', label: 'Bar' }];
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
-  const [station, setStation] = useState<'kitchen' | 'bar'>('kitchen');
+  const [station, setStation] = useState<string>(stationDefs[0]?.key ?? 'kitchen');
   const [qty, setQty] = useState(1);
   const cents = Math.round(parseFloat(price || '0') * 100);
   return (
@@ -685,8 +686,9 @@ function OpenItemDialog({
       <input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} style={{ width: '100%' }} className="mb" />
       <label>Prepared by</label>
       <div className="row mb">
-        <button className={station === 'kitchen' ? 'primary' : ''} onClick={() => setStation('kitchen')}>Kitchen</button>
-        <button className={station === 'bar' ? 'primary' : ''} onClick={() => setStation('bar')}>Bar</button>
+        {stationDefs.map((st) => (
+          <button key={st.key} className={station === st.key ? 'primary' : ''} onClick={() => setStation(st.key)}>{st.label}</button>
+        ))}
         <div className="grow" />
         <button className="qty-btn" onClick={() => setQty((q) => Math.max(1, q - 1))}>−</button>
         <strong>{qty}</strong>

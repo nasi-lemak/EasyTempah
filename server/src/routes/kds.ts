@@ -13,7 +13,7 @@ kdsRouter.get('/tickets', (req, res) => {
   const station = typeof req.query.station === 'string' ? req.query.station : null;
   const params: unknown[] = [];
   let stationFilter = '';
-  if (station === 'kitchen' || station === 'bar') {
+  if (typeof station === 'string' && station && station !== 'all') {
     stationFilter = 'AND oi.station = ?';
     params.push(station);
   }

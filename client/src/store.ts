@@ -11,6 +11,7 @@ import type {
   PlatformsSettings,
   PrintersSettings,
   ReceiptsSettings,
+  StationsSettings,
   TerminalSettings,
   TaxSettings,
 } from './types';
@@ -26,6 +27,7 @@ export interface SettingsBundle {
   loyalty?: LoyaltySettings;
   kds?: KdsSettings;
   terminals?: TerminalSettings;
+  stations?: StationsSettings;
   receipts?: ReceiptsSettings;
   logo?: string;
   demo?: DemoSettings;
@@ -44,6 +46,7 @@ interface AppState {
   loyalty: LoyaltySettings | null;
   kds: KdsSettings | null;
   terminals: TerminalSettings | null;
+  stations: StationsSettings | null;
   receipts: ReceiptsSettings | null;
   logo: string;
   demo: DemoSettings | null;
@@ -79,6 +82,7 @@ export const useStore = create<AppState>((set) => ({
   loyalty: null,
   kds: null,
   terminals: null,
+  stations: null,
   receipts: null,
   logo: '',
   demo: null,
@@ -104,6 +108,7 @@ export const useStore = create<AppState>((set) => ({
       ...(bundle.loyalty ? { loyalty: bundle.loyalty } : {}),
       ...(bundle.kds ? { kds: bundle.kds } : {}),
       ...(bundle.terminals ? { terminals: bundle.terminals } : {}),
+      ...(bundle.stations ? { stations: bundle.stations } : {}),
       ...(bundle.receipts ? { receipts: bundle.receipts } : {}),
       ...(bundle.logo !== undefined ? { logo: bundle.logo } : {}),
       ...(bundle.demo ? { demo: bundle.demo } : {}),
